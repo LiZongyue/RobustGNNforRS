@@ -274,6 +274,10 @@ class NGCF(nn.Module):
             with torch.no_grad():
                 aver_val_loss = 0.
                 total_batch_val = len(users_val) // 2048 + 1
+                users_val = users_val.to(self.device)
+                posItems_val = posItems_val.to(self.device)
+                negItems_val = negItems_val.to(self.device)
+                users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
                 for (batch_i,
                      (batch_users_val,
                       batch_pos_val,

@@ -122,7 +122,7 @@ net = dataset.Graph
 # adj matrix only contains users and items
 perturbations = int(args.ptb_rate * (net.sum() // args.perturb_strength_list[args.modified_adj_id]))
 
-rowsum = torch.tensor(net.sum(1))
+rowsum = torch.tensor(net.sum(1)).to(device)
 r_inv = rowsum.pow(-1 / 2).flatten()
 r_inv[torch.isinf(r_inv)] = 0.
 
@@ -130,11 +130,11 @@ val_diag = r_inv
 idx = np.where(torch.add(r_inv != 0, r_inv == 0))[0]
 indices_diag = np.vstack((idx, idx))
 
-i_d = torch.LongTensor(indices_diag)
-v_d = torch.FloatTensor(val_diag)
+i_d = torch.LongTensor(indices_diag).to(device)
+v_d = torch.FloatTensor(val_diag).to(device)
 shape = net.shape
 
-d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape))
+d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
 
 # load training data (ID)
 users, posItems, negItems = utils.getTrainSet(dataset)
@@ -149,18 +149,22 @@ data_len = len(users)
 if args.train_baseline:
     print("NGCF Baseline Model Calibration.")
     model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+    model = model.to(device)
     model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
     print("GCMC Baseline Model Calibration.")
     model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+    model = model.to(device)
     model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
     print("LightGCN Baseline Model Calibration.")
     model = lightgcn.LightGCN(device, use_dcl=False)
+    model = model.to(device)
     model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
     print("LR-GCCF Baseline Model Calibration.")
     model = lightgcn.LightGCN(device, is_light_gcn=False, use_dcl=False)
+    model = model.to(device)
     model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
 if args.model_ngcf:

@@ -722,7 +722,7 @@ class GROC_loss(nn.Module):
 
             aver_loss, aver_bpr_loss, aver_groc_loss = 0., 0., 0.
             val_aver_loss, val_aver_bpr_loss, val_aver_groc_loss = 0., 0., 0.
-            val_max_loss, val_max_bpr_loss, val_max_groc_loss = 1e5, 1e5, 1e5
+            val_max_loss, val_max_bpr_loss, val_max_groc_loss = float('Inf'), float('Inf'), float('Inf')
 
             for (batch_i, (batch_users, batch_pos, batch_neg)) \
                     in enumerate(utils.minibatch(users, posItems, negItems, batch_size=self.args.batch_size)):
@@ -753,6 +753,10 @@ class GROC_loss(nn.Module):
                 print('Starting validation')
                 eval_log.append("Valid Epoch: {}:".format(i))
                 with torch.no_grad():
+                    users_val = users_val.to(self.device)
+                    posItems_val = posItems_val.to(self.device)
+                    negItems_val = negItems_val.to(self.device)
+                    users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
                     for (batch_i, (batch_users, batch_pos, batch_neg)) \
                             in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
                         val_loss, val_bpr_loss, val_dcl_loss = \
