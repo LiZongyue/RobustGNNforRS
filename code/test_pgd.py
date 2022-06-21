@@ -1,3 +1,4 @@
+import gc
 import torch
 import numpy as np
 import argparse
@@ -9,7 +10,7 @@ from topology_attack import PGDAttack
 import utils
 from utils_attack import attack_model, attack_randomly, attack_embedding
 import Procedure
-from scipy.sparse import csc_matrix
+from scipy.sparse import csc_matrix, coo_matrix
 from groc_loss import GROC_loss
 
 
@@ -36,7 +37,7 @@ parser.add_argument('--use_IntegratedGradient',         type=bool,  default=Fals
 parser.add_argument('--groc_with_bpr_cat',              type=bool,  default=False,                                                                                                                                                help='Use scheduler for learning rate decay')
 parser.add_argument('--use_groc_pgd',                   type=bool,  default=False,                                                                                                                                                help='Use scheduler for learning rate decay')
 parser.add_argument('--loss_weight_bpr',                type=float, default=0.9,                                                                                                                                                 help='train loss with learnable weight between 2 losses')
-parser.add_argument('--dataset',                        type=str,   default='citeseer',                                                                                                             choices=['MOOC'],            help='dataset')
+parser.add_argument('--dataset',                        type=str,   default='ml-1m',                                                                                                             choices=['ml-1m', 'amazon-book'], help='dataset')
 parser.add_argument('--T_groc',                         type=float, default=0.7,                                                                                                                                                 help='param temperature for GROC')
 parser.add_argument('--ptb_rate',                       type=float, default=0.5,                                                                                                                                                 help='perturbation rate')
 parser.add_argument('--model',                          type=str,   default='PGD',                                                                                                                  choices=['PGD', 'min-max'],  help='model variant')
@@ -73,69 +74,108 @@ parser.add_argument('--max_nodes_per_hop',                 type=int,   default=2
 parser.add_argument('--node_percentage_list',                 type=list,   default=[0.25, 0.5, 0.75, 1],                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--node_percentage_list_index',         type=int,   default=0,                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--model_ngcf',                         type=bool,   default=False,                                                                                                                                                   help='mask embedding of users/items of GCN')
+parser.add_argument('--k',                                 type=float,   default=0.01,                                                                                                                                                   help='mask embedding of users/items of GCN')
+parser.add_argument('--valid_freq',                         type=int,   default=1,                                                                                                                                                   help='mask embedding of users/items of GCN')
+parser.add_argument('--save_to',                           type=str,   default='tmp',                                                                                                                                                   help='mask embedding of users/items of GCN')
+parser.add_argument('--val_batch_size',                 type=int,   default=2048,                                                                                                                                                help='BS.')
+parser.add_argument('--train_baseline',                 type=bool,   default=False,                                                                                                                                                help='BS.')
+parser.add_argument('--baseline',                         type=str,   default='NGCF',                                                                                                                                                help='BS.')
 
 args = parser.parse_args()
+num_users = dataset.n_user
+num_items = dataset.m_item
 
 print("=================================================")
 print("All parameters in args")
 print(args)
 print("=================================================")
 
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
+
 if device != 'cpu':
     torch.cuda.manual_seed(args.seed)
 
-net = dataset.getSparseGraph()
-net = csc_matrix(net)
+adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
 
-adj = torch.FloatTensor(net.todense()).to(device)
-rowsum = adj.sum(1)
+print("Constructing Adj_insert tensor...")
+adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_2_hops.pt'
+if os.path.exists(adj_path):
+    adj_2_hops = torch.load(adj_path, map_location='cpu')
+    adj_2_hops = adj_2_hops.to(device)
+else:
+    adj_2_hops = \
+        utils.build_two_hop_adj(device, adj,
+                                utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
+                                args, num_users, num_items)
+    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
+    torch.save(adj_2_hops, adj_path)
+print("Construction finished!")
+
+net = dataset.Graph
+
+# adj matrix only contains users and items
+perturbations = int(args.ptb_rate * (net.sum() // args.perturb_strength_list[args.modified_adj_id]))
+
+rowsum = torch.tensor(net.sum(1))
 r_inv = rowsum.pow(-1 / 2).flatten()
 r_inv[torch.isinf(r_inv)] = 0.
-d_mtr = torch.diag(r_inv).to_sparse().to(device)
 
-perturbations = int(args.ptb_rate * (adj.sum() // args.perturb_strength_list[args.modified_adj_id]))
-# perturbations = int(args.ptb_rate * ((dataset.trainDataSize+dataset.testDataSize)//2))
+val_diag = r_inv
+idx = np.where(torch.add(r_inv != 0, r_inv == 0))[0]
+indices_diag = np.vstack((idx, idx))
 
-# adj = torch.FloatTensor(adj).to(device)
+i_d = torch.LongTensor(indices_diag)
+v_d = torch.FloatTensor(val_diag)
+shape = net.shape
 
+d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape))
+
+# load training data (ID)
 users, posItems, negItems = utils.getTrainSet(dataset)
-# users = users[:30]
-# posItems = posItems[:30]
-# negItems = negItems[:30]
+users_val, posItems_val, negItems_val = utils.getTestSet(dataset)
+# comment for GPU code, only for debugging
+users = users[:30]
+posItems = posItems[:30]
+negItems = negItems[:30]
+
 data_len = len(users)
 
-# Setup and fit origin Model
+if args.train_baseline:
+    print("NGCF Baseline Model Calibration.")
+    model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
-Recmodel = lightgcn.LightGCN(device)
-Recmodel = Recmodel.to(device)
-# Recmodel.fit(adj, users, posItems, negItems)
+    print("GCMC Baseline Model Calibration.")
+    model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
-num_users = Recmodel.num_users
-num_items = Recmodel.num_items
-adj_shape = num_users + num_items
+    print("LightGCN Baseline Model Calibration.")
+    model = lightgcn.LightGCN(device, use_dcl=False)
+    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
+
+    print("LR-GCCF Baseline Model Calibration.")
+    model = lightgcn.LightGCN(device, is_light_gcn=False, use_dcl=False)
+    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
 if args.model_ngcf:
     print("train model NGCF")
     print("=================================================")
 
-    pgd_model = PGDAttack(model=Recmodel, nnodes=adj.size(1), device=device)
-    pgd_model = pgd_model.to(device)
-
-    Recmodel = ngcf_ori.NGCF(num_users, num_items, device)
+    Recmodel = ngcf_ori.NGCF(device, num_users, num_items)
     Recmodel = Recmodel.to(device)
 
-    groc = GROC_loss(Recmodel, adj, d_mtr, args, pgd_model)
-    groc.groc_train_with_bpr(data_len, users, posItems, negItems, perturbations)
+    groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+    groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
     print("save model")
     torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
                '/data/NGCF_after_GROC_{}.pt'.format(args.loss_weight_bpr))
 
     print("===========================")
-
     print("original model performance on original adjacency matrix:")
     print("===========================")
     Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
@@ -146,31 +186,6 @@ if args.model_ngcf:
     modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
                                   args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
     Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
-
-    '''
-    # data_prepocessing
-    user_fe = torch.load('C:/tmp/user_feature_tensor.pt')
-    item_fe = torch.load('C:/tmp/item_feature_tensor.pt')
-    num_users = user_fe.size()[0]
-    num_items = item_fe.size()[0]
-
-    if user_fe.size()[1] > item_fe.size()[1]:
-        target = torch.zeros(item_fe.size()[0], user_fe.size()[1])
-        target[:, :item_fe.size()[1]] = item_fe
-        feature_dim = user_fe.size()[1]
-
-        feature = torch.cat((user_fe, target), 1)
-    else:
-        target = torch.zeros(user_fe.size()[0], item_fe.size()[1])
-        target[:, :user_fe.size()[1]] = user_fe
-        feature_dim = item_fe.size()[1]
-
-        feature = torch.cat((target, item_fe), 1)
-
-    Recmodel = ngcf_ori.NGCF(num_users, num_items, feature_dim, device)
-    Recmodel = Recmodel.to(device)
-    '''
-
 
 if args.random_perturb:
     print("train model using random perturbation")

@@ -28,8 +28,8 @@ def parse_args():
                         help="the fold num used to split large adj matrix, like gowalla")
     parser.add_argument('--testbatch', type=int, default=100,
                         help="the batch size of users for testing")
-    parser.add_argument('--dataset', type=str, default='ml-1m',
-                        help="available datasets: [lastfm, gowalla, yelp2018, amazon, ml-1m]")
+    parser.add_argument('--dataset', type=str, default='amazon-book',
+                        help="available datasets: [lastfm, gowalla, yelp2018, amazon-book, ml-1m]")
     parser.add_argument('--path', type=str, default="./checkpoints",
                         help="path to save weights")
     parser.add_argument('--topks', nargs='?', default="[20]",
@@ -65,5 +65,11 @@ def parse_args():
     parser.add_argument('--use_IntegratedGradient', type=bool, default=False, help='train a pre-trained GCN on GROC loss')
     parser.add_argument('--use_groc_pgd', type=bool, default=False, help='train a pre-trained GCN on GROC loss')
     parser.add_argument('--model_ngcf', type=bool, default=False, help='train a pre-trained GCN on GROC loss')
+    parser.add_argument('--k', type=float, default=0.01, help='mask embedding of users/items of GCN')
+    parser.add_argument('--valid_freq', type=int, default=1, help='valid freq')
+    parser.add_argument('--save_to', type=str, default='tmp', help='save path of ckpt and log')
+    parser.add_argument('--val_batch_size', type=int, default=2048, help='val BS.')
+    parser.add_argument('--train_baseline', type=bool, default=False, help='train baseline.')
+    parser.add_argument('--baseline', type=str, default='NGCF', help='baseline name')
 
     return parser.parse_args()

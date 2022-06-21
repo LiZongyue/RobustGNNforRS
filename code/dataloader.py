@@ -45,6 +45,9 @@ class BasicDataset(Dataset):
     def allPos(self):
         raise NotImplementedError
 
+    def allPostest(self):
+        raise NotImplementedError
+
     def getUserItemFeedback(self, users, items):
         raise NotImplementedError
 
@@ -263,15 +266,18 @@ class Loader(BasicDataset):
         with open(test_file) as f:
             for l in f.readlines():
                 if len(l) > 0:
-                    l = l.strip('\n').split(' ')
-                    items = [int(i) for i in l[1:]]
-                    uid = int(l[0])
-                    testUniqueUsers.append(uid)
-                    testUser.extend([uid] * len(items))
-                    testItem.extend(items)
-                    self.m_item = max(self.m_item, max(items))
-                    self.n_user = max(self.n_user, uid)
-                    self.testDataSize += len(items)
+                    try:
+                        l = l.strip('\n').split(' ')
+                        items = [int(i) for i in l[1:]]
+                        uid = int(l[0])
+                        testUniqueUsers.append(uid)
+                        testUser.extend([uid] * len(items))
+                        testItem.extend(items)
+                        self.m_item = max(self.m_item, max(items))
+                        self.n_user = max(self.n_user, uid)
+                        self.testDataSize += len(items)
+                    except:
+                        pass
         self.m_item += 1
         self.n_user += 1
         self.testUniqueUsers = np.array(testUniqueUsers)
@@ -286,12 +292,20 @@ class Loader(BasicDataset):
         # (users,items), bipartite graph
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item))
+        self.TestUserItemNet = csr_matrix((np.ones(len(self.testUser)), (self.testUser, self.testItem)),
+                                          shape=(self.n_user, self.m_item))
         self.users_D = np.array(self.UserItemNet.sum(axis=1)).squeeze()
         self.users_D[self.users_D == 0.] = 1
         self.items_D = np.array(self.UserItemNet.sum(axis=0)).squeeze()
         self.items_D[self.items_D == 0.] = 1.
+
+        self.test_users_D = np.array(self.TestUserItemNet.sum(axis=1)).squeeze()
+        self.test_users_D[self.test_users_D == 0.] = 1
+        self.test_items_D = np.array(self.TestUserItemNet.sum(axis=0)).squeeze()
+        self.test_items_D[self.test_items_D == 0.] = 1.
         # pre-calculate
         self._allPos = self.getUserPosItems(list(range(self.n_user)))
+        self._allPostest = self.getUserTestPosItems(list(range(self.n_user)))
         self.__testDict = self.__build_test()
         print(f"{world.dataset} is ready to go")
 
@@ -315,6 +329,10 @@ class Loader(BasicDataset):
     def allPos(self):
         return self._allPos
 
+    @property
+    def allPostest(self):
+        return self._allPostest
+
     def _split_A_hat(self, A):
         A_fold = []
         fold_len = (self.n_users + self.m_items) // self.folds
@@ -335,48 +353,6 @@ class Loader(BasicDataset):
         data = torch.FloatTensor(coo.data)
         return torch.sparse.FloatTensor(index, data, torch.Size(coo.shape))
 
-    '''    
-    def getSparseGraph(self):
-        print("loading adjacency matrix")
-        if self.Graph is None:
-            try:
-                pre_adj_mat = sp.load_npz(self.path + '/s_pre_adj_mat.npz')
-                print("successfully loaded...")
-                norm_adj = pre_adj_mat
-            except :
-                print("generating adjacency matrix")
-                s = time()
-                adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32)
-                adj_mat = adj_mat.tolil()
-                R = self.UserItemNet.tolil()
-                adj_mat[:self.n_users, self.n_users:] = R
-                adj_mat[self.n_users:, :self.n_users] = R.T
-                adj_mat = adj_mat.todok()
-                # adj_mat = adj_mat + sp.eye(adj_mat.shape[0])
-                
-                rowsum = np.array(adj_mat.sum(axis=1))
-                d_inv = np.power(rowsum, -0.5).flatten()
-                d_inv[np.isinf(d_inv)] = 0.
-                d_mat = sp.diags(d_inv)
-                
-                norm_adj = d_mat.dot(adj_mat)
-                norm_adj = norm_adj.dot(d_mat)
-                norm_adj = norm_adj.tocsr()
-                end = time()
-                print(f"costing {end-s}s, saved norm_mat...")
-                sp.save_npz(self.path + '/s_pre_adj_mat.npz', norm_adj)
-
-            if self.split == True:
-                self.Graph = self._split_A_hat(norm_adj)
-                print("done split matrix")
-            else:
-                #self.Graph = self._convert_sp_mat_to_sp_tensor(norm_adj)
-                self.Graph = norm_adj
-                #self.Graph = self.Graph.coalesce().to(world.device)
-                print("don't split the matrix")
-        return self.Graph
-    '''
-
     def getSparseGraph(self):
         print("loading adjacency matrix")
         if self.Graph is None:
@@ -385,7 +361,7 @@ class Loader(BasicDataset):
             s = time()
             adj_mat = sp.dok_matrix((self.n_users + self.m_items, self.n_users + self.m_items), dtype=np.float32)
             adj_mat = adj_mat.tolil()
-            R = self.UserItemNet.tolil()
+            R = self.UserItemNet.tolil().astype(np.float32)
             adj_mat[:self.n_users, self.n_users:] = R
             adj_mat[self.n_users:, :self.n_users] = R.T
             # adj_mat = adj_mat.tolil()
@@ -435,6 +411,12 @@ class Loader(BasicDataset):
         posItems = []
         for user in users:
             posItems.append(self.UserItemNet[user].nonzero()[1])
+        return posItems
+
+    def getUserTestPosItems(self, users):
+        posItems = []
+        for user in users:
+            posItems.append(self.TestUserItemNet[user].nonzero()[1])
         return posItems
 
     # def getUserNegItems(self, users):

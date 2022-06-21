@@ -1,6 +1,7 @@
 import scipy.sparse as sp
 import world
 import random
+import gc
 import torch
 from torch import nn, optim
 import numpy as np
@@ -9,7 +10,123 @@ from time import time
 from model import PairWiseModel
 from sklearn.metrics import roc_auc_score
 import os
+import lightgcn
+import ngcf_ori
+from datetime import datetime
 from transformers import get_linear_schedule_with_warmup
+
+
+def save_model(model, file_name):
+    dirname = os.path.dirname(file_name)
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    print('Saving model to', file_name)
+    torch.save(model.state_dict(), file_name)
+    print('Saved model to ', file_name)
+    return
+
+
+def build_two_hop_adj(device, adj, adj_u_i, args, num_users, num_items):
+    # make adj_u_i a tensor
+    # calculate 3 dense hop neighbors
+    print("Starting calculate 3 hops neighbours...")
+    adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool().float()
+    print("Neighbours calculation finished!")
+    adj_u_i_s = adj_u_i.to_sparse()
+
+    del adj_u_i
+    gc.collect()
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+
+    adj_insert = (adj_after_2_hops - adj_u_i_s).bool()
+
+    del adj_after_2_hops, adj_u_i_s
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
+
+    # import calibrated GNN model and utilize its embeddings for topK
+    local_path = os.path.abspath(os.path.dirname(os.getcwd()))
+    user_embed, item_embed = None, None
+    if args.baseline == 'NGCF':
+        print('loading baseline Model NGCF...')
+        path = local_path + '/models/NGCF_baseline.ckpt'
+        baseline = ngcf_ori.NGCF(device, num_users, num_items)
+        baseline.load_state_dict(torch.load(path))
+        baseline = baseline.to(device)
+        user_embed = baseline.embedding_dict["user_emb"].data
+        item_embed = baseline.embedding_dict["item_emb"].data
+    if args.baseline == 'GCMC':
+        print('loading baseline Model GCMC...')
+        path = local_path + '/models/GCMC_baseline.ckpt'
+        baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True)
+        baseline.load_state_dict(torch.load(path))
+        baseline = baseline.to(device)
+        user_embed = baseline.embedding_dict["user_emb"].data
+        item_embed = baseline.embedding_dict["item_emb"].data
+    if args.baseline == 'lightGCN':
+        print('loading baseline Model lightGCN...')
+        path = local_path + '/models/lightGCN_baseline.ckpt'
+        baseline = lightgcn.LightGCN(device)
+        baseline.load_state_dict(torch.load(path))
+        baseline = baseline.to(device)
+        user_embed = baseline.embedding_user.data
+        item_embed = baseline.embedding_item.data
+    if args.baseline == 'LR-GCCF':
+        print('loading baseline Model LR-GCCF...')
+        path = local_path + '/models/gccf_baseline.ckpt'
+        baseline = lightgcn.LightGCN(device, is_light_gcn=False)
+        baseline.load_state_dict(torch.load(path))
+        baseline = baseline.to(device)
+        user_embed = baseline.embedding_user.data
+        item_embed = baseline.embedding_item.data
+
+    if user_embed is None or item_embed is None:
+        raise Exception('check BaseLine loading! No Embedding loaded.')
+
+    score = user_embed @ item_embed.T
+    score_insert = score * adj_insert
+
+    del adj_insert, score, user_embed, item_embed
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
+
+    add_num_row = (torch.count_nonzero(score_insert, 1) * args.k).int()
+    add_num_row = add_num_row.detach().cpu().numpy()
+    insert_ind = []
+
+    for idx in range(len(add_num_row)):
+        _, col_idx = torch.topk(score_insert[idx], add_num_row[idx])
+        if col_idx.nelement() != 0:  # check the col_idx is empty
+            insert_ind.append(torch.stack([torch.tensor(idx).repeat(len(col_idx)).to(device), col_idx], 0))
+
+    insert_ind = torch.cat(insert_ind, 1)
+
+    ind_up_tri = torch.stack((insert_ind[0], insert_ind[1].clone() + num_users))
+    ind_down_tri = ind_up_tri.clone()
+    ind_down_tri[[1, 0]] = ind_down_tri.clone()
+    ind = torch.cat([ind_up_tri, ind_down_tri, adj.coalesce().indices()], -1)
+    adj_2_hops = torch.sparse_coo_tensor(ind, torch.ones(ind.shape[1]), adj.shape).to(device)
+
+    return adj_2_hops
+
+
+def append_log_to_file(eval_log, epoch, filename):
+    dirname = os.path.dirname(filename)
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+        print('Creating new log file')
+    f = open(filename, 'a+')
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+    f.write('Log time: %s\n' % dt_string)
+    f.write('Epoch %d\n' % epoch)
+    for line in eval_log:
+        f.write('%s\n' % line)
+    f.write('\n')
+    f.close()
 
 
 def tensor2onehot(labels):
@@ -73,7 +190,7 @@ def normalize_feature(mx):
 
 def normalize_adj_tensor(adj, m_d=None, sparse=False):
     device = torch.device("cuda" if adj.is_cuda else "cpu")
-    if sparse:
+    if sparse and m_d is not None:
 
         index = torch.arange(0, adj.size()[0])
         i = torch.stack((index, index)).to(device)
@@ -212,9 +329,80 @@ def UniformSample_original(users, dataset):
     return np.array(S), [total, sample_time1, sample_time2]
 
 
+def UniformSample_originalTest(users, dataset):
+    """
+    the original impliment of BPR Sampling in LightGCN
+    :return:
+        np.array
+    """
+    total_start = time()
+    dataset: BasicDataset
+    '''
+    user_num = dataset.trainDataSize
+    users = np.random.randint(0, dataset.n_users, user_num)
+    allPos = dataset.allPos
+    S = []
+    sample_time1 = 0.
+    sample_time2 = 0.
+    for i, user in enumerate(users):
+        start = time()
+        posForUser = allPos[user]
+        if len(posForUser) == 0:
+            continue
+        sample_time2 += time() - start
+        posindex = np.random.randint(0, len(posForUser))
+        positem = posForUser[posindex]
+        while True:
+            negitem = np.random.randint(0, dataset.m_items)
+            if negitem in posForUser:
+                continue
+            else:
+                break
+        S.append([user, positem, negitem])
+        end = time()
+        sample_time1 += end - start
+    '''
+
+    allPos = dataset.allPostest
+    S = []
+    sample_time1 = 0.
+    sample_time2 = 0.
+    for user in range(dataset.n_users):
+        start = time()
+        posForUser = allPos[user]
+        if len(posForUser) == 0:
+            continue
+        sample_time2 += time() - start
+        # posindex = np.random.randint(0, len(posForUser))
+        for posindex in range(len(posForUser)):
+            positem = posForUser[posindex]
+            while True:
+                negitem = np.random.randint(0, dataset.m_items)
+                if negitem in posForUser:
+                    continue
+                else:
+                    break
+            S.append([user, positem, negitem])
+            end = time()
+            sample_time1 += end - start
+    total = time() - total_start
+    return np.array(S), [total, sample_time1, sample_time2]
+
+
 def getTrainSet(dataset):
     allusers = list(range(dataset.n_users))
     S, sam_time = UniformSample_original(allusers, dataset)
+    print(f"BPR[sample time][{sam_time[0]:.1f}={sam_time[1]:.2f}+{sam_time[2]:.2f}]")
+    users = torch.Tensor(S[:, 0]).long()
+    posItems = torch.Tensor(S[:, 1]).long()
+    negItems = torch.Tensor(S[:, 2]).long()
+
+    return users, posItems, negItems
+
+
+def getTestSet(dataset):
+    allusers = list(range(dataset.n_users))
+    S, sam_time = UniformSample_originalTest(allusers, dataset)
     print(f"BPR[sample time][{sam_time[0]:.1f}={sam_time[1]:.2f}+{sam_time[2]:.2f}]")
     users = torch.Tensor(S[:, 0]).long()
     posItems = torch.Tensor(S[:, 1]).long()
