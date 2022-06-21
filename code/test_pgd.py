@@ -100,9 +100,8 @@ if device != 'cpu':
 
 adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
 
-print("Constructing Adj_insert tensor...")
-
 if not args.train_baseline:
+    print("Constructing Adj_insert tensor...")
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_2_hops.pt'
     if os.path.exists(adj_path):
         adj_2_hops = torch.load(adj_path, map_location='cpu')
