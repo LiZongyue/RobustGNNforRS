@@ -127,7 +127,7 @@ r_inv = rowsum.pow(-1 / 2).flatten()
 r_inv[torch.isinf(r_inv)] = 0.
 
 val_diag = r_inv
-idx = np.where(torch.add(r_inv != 0, r_inv == 0))[0]
+idx = np.where((torch.add(r_inv != 0, r_inv == 0)).detach().cpu())[0]
 indices_diag = np.vstack((idx, idx))
 
 i_d = torch.LongTensor(indices_diag).to(device)
