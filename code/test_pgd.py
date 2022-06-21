@@ -101,19 +101,21 @@ if device != 'cpu':
 adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
 
 print("Constructing Adj_insert tensor...")
-adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_2_hops.pt'
-if os.path.exists(adj_path):
-    adj_2_hops = torch.load(adj_path, map_location='cpu')
-    adj_2_hops = adj_2_hops.to(device)
-else:
-    adj_2_hops = \
-        utils.build_two_hop_adj(device, adj,
-                                utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
-                                args, num_users, num_items)
-    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
-        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
-    torch.save(adj_2_hops, adj_path)
-print("Construction finished!")
+
+if not args.train_baseline:
+    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_2_hops.pt'
+    if os.path.exists(adj_path):
+        adj_2_hops = torch.load(adj_path, map_location='cpu')
+        adj_2_hops = adj_2_hops.to(device)
+    else:
+        adj_2_hops = \
+            utils.build_two_hop_adj(device, adj,
+                                    utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
+                                    args, num_users, num_items)
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
+        torch.save(adj_2_hops, adj_path)
+    print("Construction finished!")
 
 net = dataset.Graph
 
