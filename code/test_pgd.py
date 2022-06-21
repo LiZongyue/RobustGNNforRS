@@ -131,7 +131,7 @@ idx = np.where((torch.add(r_inv != 0, r_inv == 0)).detach().cpu())[0]
 indices_diag = np.vstack((idx, idx))
 
 i_d = torch.LongTensor(indices_diag).to(device)
-v_d = torch.FloatTensor(val_diag).to(device)
+v_d = torch.FloatTensor(val_diag.detach().cpu()).to(device)
 shape = net.shape
 
 d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
