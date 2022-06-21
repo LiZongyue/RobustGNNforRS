@@ -7,7 +7,7 @@ import utils
 
 
 class LightGCN(nn.Module):
-    def __init__(self, device=None, sparse=True, is_light_gcn=True, use_dcl=True):
+    def __init__(self, device=None, sparse=True, is_light_gcn=True, use_dcl=True, train_groc=False):
         super(LightGCN, self).__init__()
 
         assert device is not None, "Please specify 'device'!"
@@ -23,7 +23,9 @@ class LightGCN(nn.Module):
         self._is_sparse = sparse
         self.is_lightgcn = is_light_gcn
         self.use_dcl = use_dcl
-        self.adj = nn.Parameter(torch.sparse_coo_tensor(size=(self.adj_shape, self.adj_shape)))
+        self.train_groc = train_groc
+        if train_groc:
+            self.adj = nn.Parameter(torch.sparse_coo_tensor(size=(self.adj_shape, self.adj_shape)))
 
         self.tau_plus = 1e-3
         self.T = 0.07
@@ -113,9 +115,11 @@ class LightGCN(nn.Module):
         """
         query from GROC means that we want to push adj into computational graph
         """
-        self.adj = nn.Parameter(adj)
-        all_users, all_items = self.computer(self.adj)
-
+        if self.train_groc:
+            self.adj = nn.Parameter(adj)
+            all_users, all_items = self.computer(self.adj)
+        else:
+            all_users, all_items = self.computer(adj)
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
         # neg_emb = all_items[neg_items]
