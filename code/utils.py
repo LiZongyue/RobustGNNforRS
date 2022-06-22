@@ -147,8 +147,8 @@ def build_two_hop_adj(device, args, num_users):
     ind_down_tri = ind_up_tri.clone()
     ind_down_tri[[1, 0]] = ind_down_tri.clone()
     adj = torch.load(ori_adj_path, map_location='cpu').to(device)
-    ind = torch.cat([ind_up_tri, ind_down_tri, adj.coalesce().indices()], -1)
-    adj_2_hops = torch.sparse_coo_tensor(ind, torch.ones(ind.shape[1]), adj.shape).to(device)
+    ind = torch.cat([ind_up_tri, ind_down_tri, adj.coalesce().indices()], -1).to(device)
+    adj_2_hops = torch.sparse_coo_tensor(ind, torch.ones(ind.shape[1]).to(device), adj.shape).to(device)
 
     return adj_2_hops
 
