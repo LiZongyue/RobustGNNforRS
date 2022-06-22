@@ -33,6 +33,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
         os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
+    score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores.pt'
     if os.path.exists(adj_path):
         adj_insert = torch.load(adj_path, map_location='cpu')
         adj_insert = adj_insert.to(device)
@@ -67,103 +68,58 @@ def build_score(device, adj_u_i, args, num_users, num_items):
 
         torch.save(adj_insert, adj_path)
 
-    # chunk_size = 1000
-    # adj_insert_list = []
-    # for chunk_i in range(1, int(adj_insert.shape[0] / chunk_size) + 1):
-    #     adj_insert_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
-    #     adj_insert_list.append(adj_insert_i)
-    # adj_insert_list.append(adj_insert[chunk_i * chunk_size:, :])
-    adj_insert_list = list(torch.split(adj_insert, 1000))
+    if os.path.exists(score_path):
+        score = torch.load(score_path, map_location='cpu')
+        score = score.to(device)
 
-    del adj_insert
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
+    else:
+        # import calibrated GNN model and utilize its embeddings for topK
+        local_path = os.path.abspath(os.path.dirname(os.getcwd()))
+        user_embed, item_embed = None, None
+        if args.baseline == 'NGCF':
+            print('loading baseline Model NGCF...')
+            path = local_path + '/models/NGCF_baseline.ckpt'
+            baseline = ngcf_ori.NGCF(device, num_users, num_items)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_dict["user_emb"].data
+            item_embed = baseline.embedding_dict["item_emb"].data
+        if args.baseline == 'GCMC':
+            print('loading baseline Model GCMC...')
+            path = local_path + '/models/GCMC_baseline.ckpt'
+            baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_dict["user_emb"].data
+            item_embed = baseline.embedding_dict["item_emb"].data
+        if args.baseline == 'lightGCN':
+            print('loading baseline Model lightGCN...')
+            path = local_path + '/models/lightGCN_baseline.ckpt'
+            baseline = lightgcn.LightGCN(device)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_user.weight
+            item_embed = baseline.embedding_item.weight
+        if args.baseline == 'LR-GCCF':
+            print('loading baseline Model LR-GCCF...')
+            path = local_path + '/models/gccf_baseline.ckpt'
+            baseline = lightgcn.LightGCN(device, is_light_gcn=False)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_user.weight
+            item_embed = baseline.embedding_item.weight
 
-    # import calibrated GNN model and utilize its embeddings for topK
-    local_path = os.path.abspath(os.path.dirname(os.getcwd()))
-    user_embed, item_embed = None, None
-    if args.baseline == 'NGCF':
-        print('loading baseline Model NGCF...')
-        path = local_path + '/models/NGCF_baseline.ckpt'
-        baseline = ngcf_ori.NGCF(device, num_users, num_items)
-        baseline.load_state_dict(torch.load(path))
-        baseline = baseline.to(device)
-        user_embed = baseline.embedding_dict["user_emb"].data
-        item_embed = baseline.embedding_dict["item_emb"].data
-    if args.baseline == 'GCMC':
-        print('loading baseline Model GCMC...')
-        path = local_path + '/models/GCMC_baseline.ckpt'
-        baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True)
-        baseline.load_state_dict(torch.load(path))
-        baseline = baseline.to(device)
-        user_embed = baseline.embedding_dict["user_emb"].data
-        item_embed = baseline.embedding_dict["item_emb"].data
-    if args.baseline == 'lightGCN':
-        print('loading baseline Model lightGCN...')
-        path = local_path + '/models/lightGCN_baseline.ckpt'
-        baseline = lightgcn.LightGCN(device)
-        baseline.load_state_dict(torch.load(path))
-        baseline = baseline.to(device)
-        user_embed = baseline.embedding_user.weight
-        item_embed = baseline.embedding_item.weight
-    if args.baseline == 'LR-GCCF':
-        print('loading baseline Model LR-GCCF...')
-        path = local_path + '/models/gccf_baseline.ckpt'
-        baseline = lightgcn.LightGCN(device, is_light_gcn=False)
-        baseline.load_state_dict(torch.load(path))
-        baseline = baseline.to(device)
-        user_embed = baseline.embedding_user.weight
-        item_embed = baseline.embedding_item.weight
+        if user_embed is None or item_embed is None:
+            raise Exception('check BaseLine loading! No Embedding loaded.')
 
-    if user_embed is None or item_embed is None:
-        raise Exception('check BaseLine loading! No Embedding loaded.')
+        score = user_embed @ item_embed.T
+        torch.save(score, score_path)
 
-    score = user_embed @ item_embed.T
-
-    del user_embed, item_embed, baseline
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
-    # chunk_size = 1000
-    # scores_list = []
-    #
-    # for chunk_i in range(1, int(score.shape[0] / chunk_size) + 1):
-    #     score_i = score[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
-    #     scores_list.append(score_i)
-    # scores_list.append(score[(chunk_i) * chunk_size:, :])
-    # del score
-    # if device != 'cpu':
-    #     torch.cuda.empty_cache()
-    # gc.collect()
-
-    return score, adj_insert_list
+    return score, adj_insert
 
 
-def score_builder(scores, adj_insert_list, device):
-    scores_list = []
-    for idx in range(len(adj_insert_list) - 1):
-        print('{}_th element in both lists'.format(idx))
-        scores_list.append(scores[idx * 1000: (idx + 1) * 1000, :] * adj_insert_list[0])
-        del adj_insert_list[0]
-        if device != 'cpu':
-            torch.cuda.empty_cache()
-        gc.collect()
-    scores_list.append(scores[(idx + 1) * 1000:, :] * adj_insert_list[0])
-    del adj_insert_list, scores
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
-
-    for obj in gc.get_objects():
-        try:
-            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
-                print(type(obj), obj.size())
-        except:
-            pass
-
-    scores = torch.cat(scores_list, 0)
-    return scores
+def score_builder(scores, adj_insert):
+    return adj_insert * scores
 
 
 def build_two_hop_adj(device, adj, score, args, num_users):
