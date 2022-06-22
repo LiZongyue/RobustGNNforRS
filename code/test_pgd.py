@@ -150,15 +150,15 @@ users_val, posItems_val, negItems_val = utils.getTestSet(dataset)
 data_len = len(users)
 
 if args.train_baseline:
-    print("NGCF Baseline Model Calibration.")
-    model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
-    model = model.to(device)
-    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
-
-    print("GCMC Baseline Model Calibration.")
-    model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
-    model = model.to(device)
-    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
+    # print("NGCF Baseline Model Calibration.")
+    # model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+    # model = model.to(device)
+    # model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
+    #
+    # print("GCMC Baseline Model Calibration.")
+    # model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+    # model = model.to(device)
+    # model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
     print("LightGCN Baseline Model Calibration.")
     model = lightgcn.LightGCN(device, use_dcl=False)
