@@ -126,6 +126,11 @@ def score_builder(scores, adj_insert, device):
     else:
         score = adj_insert * scores
         torch.save(score, score_filtered_path)
+
+        del adj_insert, scores
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
     return score
 
 
