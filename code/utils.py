@@ -38,14 +38,8 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         adj_insert = adj_insert.to(device)
     else:
         print("Starting calculate 3 hops neighbours...")
-        tmp = adj_u_i.to_dense()
-        adj_after_1_hops = torch.sparse.mm(adj_u_i, tmp.t())
-        del tmp
-        if device != 'cpu':
-            torch.cuda.empty_cache()
-        gc.collect()
-        timesleeper.sleep(5)
-        adj_after_2_hops = torch.sparse.mm(adj_u_i.t(), adj_after_1_hops.t()).t()
+        adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
+        adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i)
 
         del adj_after_1_hops
         if device != 'cpu':
