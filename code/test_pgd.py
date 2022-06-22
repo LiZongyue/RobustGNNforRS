@@ -114,7 +114,8 @@ if not args.train_baseline:
         if device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
-        utils.score_builder()
+        utils.score_builder(device)
+        utils.row_counter(device)
         ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
         if not os.path.exists(ori_adj_path):
             adj = utils.to_tensor(dataset.getSparseGraph(), device=device)

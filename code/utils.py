@@ -105,22 +105,33 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         torch.save(score, score_path)
 
 
-def score_builder():
+def score_builder(device):
     score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
     if not os.path.exists(score_filtered_path):
         adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
         score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores.pt'
-        adj_insert = torch.load(adj_insert_path)
-        scores = torch.load(score_path)
+        adj_insert = torch.load(adj_insert_path, map_location='cpu').to(device)
+        scores = torch.load(score_path, map_location='cpu').to(device)
         score = adj_insert * scores
         torch.save(score, score_filtered_path)
+
+
+def row_counter(device):
+    row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/row_count.pt'
+    if not os.path.exists(row_count_path):
+        adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
+        adj_insert = torch.load(adj_insert_path, map_location='cpu').to(device)
+        row_count = adj_insert.sum(1)
+        torch.save(row_count, row_count_path)
 
 
 def build_two_hop_adj(device, args, num_users):
     ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
     score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
+    row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/row_count.pt'
     score = torch.load(score_filtered_path, map_location='cpu').to(device)
-    row_num = torch.count_nonzero(score, 1)
+    row_num = torch.load(row_count_path, map_location='cpu').to(device)
+
     add_num_row = (row_num * args.k).int()
     add_num_row = add_num_row.detach().cpu().numpy()
     insert_ind = []
