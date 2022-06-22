@@ -118,8 +118,15 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     return score, adj_insert
 
 
-def score_builder(scores, adj_insert):
-    return adj_insert * scores
+def score_builder(scores, adj_insert, device):
+    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
+    if os.path.exists(score_filtered_path):
+        score = torch.load(score_filtered_path, map_location='cpu')
+        score = score.to(device)
+    else:
+        score = adj_insert * scores
+        torch.save(score, score_filtered_path)
+    return score
 
 
 def build_two_hop_adj(device, adj, score, args, num_users):
