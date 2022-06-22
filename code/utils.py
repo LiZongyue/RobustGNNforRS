@@ -155,6 +155,13 @@ def score_builder(scores, adj_insert_list, device):
         torch.cuda.empty_cache()
     gc.collect()
 
+    for obj in gc.get_objects():
+        try:
+            if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+                print(type(obj), obj.size())
+        except:
+            pass
+
     scores = torch.cat(scores_list, 0)
     return scores
 
