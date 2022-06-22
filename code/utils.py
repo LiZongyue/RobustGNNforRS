@@ -150,7 +150,7 @@ def build_two_hop_adj(device, args, num_users):
     ind = torch.cat([ind_up_tri, ind_down_tri, adj.coalesce().indices()], -1).to(device)
     adj_2_hops = torch.sparse_coo_tensor(ind, torch.ones(ind.shape[1]).to(device), adj.shape).to(device)
 
-    return adj_2_hops
+    return adj_2_hops, adj
 
 
 def append_log_to_file(eval_log, epoch, filename):

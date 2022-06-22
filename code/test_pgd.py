@@ -99,15 +99,18 @@ if device != 'cpu':
     torch.cuda.manual_seed(args.seed)
     torch.cuda.empty_cache()
 gc.collect()
-
 adj = None
-
 if not args.train_baseline:
     print("Constructing Adj_insert tensor...")
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_2_hops.pt'
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
     if os.path.exists(adj_path):
         adj_2_hops = torch.load(adj_path, map_location='cpu')
         adj_2_hops = adj_2_hops.to(device)
+        if not os.path.exists(ori_adj_path):
+            adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
+        else:
+            adj = torch.load(ori_adj_path, map_location='cpu').to(device)
     else:
         utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
                             args, num_users, num_items)
@@ -116,21 +119,23 @@ if not args.train_baseline:
         gc.collect()
         utils.score_builder(device)
         utils.row_counter(device)
-        ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
         if not os.path.exists(ori_adj_path):
             adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
             torch.save(adj, ori_adj_path)
 
-        adj_2_hops = utils.build_two_hop_adj(device, args, num_users)
+        adj_2_hops, adj = utils.build_two_hop_adj(device, args, num_users)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
         torch.save(adj_2_hops, adj_path)
     print("Construction finished!")
 
-if adj is None:
-    adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
 net = dataset.Graph
-
+if adj is None:
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
+    if not os.path.exists(ori_adj_path):
+        adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
+    else:
+        adj = torch.load(ori_adj_path, map_location='cpu').to(device)
 # adj matrix only contains users and items
 perturbations = int(args.ptb_rate * (net.sum() // args.perturb_strength_list[args.modified_adj_id]))
 
