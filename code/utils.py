@@ -31,14 +31,14 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
     adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
-    adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i).cpu()
+    adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i)
 
     del adj_after_1_hops
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
 
-    adj_after_2_hops = adj_after_2_hops.bool().to(device)
+    adj_after_2_hops = adj_after_2_hops.bool()
     adj_u_i = adj_u_i.bool()
 
     if device != 'cpu':
