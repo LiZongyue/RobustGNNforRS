@@ -30,10 +30,14 @@ def build_two_hop_adj(device, adj, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
-    adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool().float()
+    adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool()
+    adj_u_i = adj_u_i.bool()
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
     print("Neighbours calculation finished!")
 
-    adj_insert = (adj_after_2_hops - adj_u_i).bool()
+    adj_insert = adj_after_2_hops ^ adj_u_i  # subtraction (XOR)
 
     del adj_after_2_hops, adj_u_i
     if device != 'cpu':
