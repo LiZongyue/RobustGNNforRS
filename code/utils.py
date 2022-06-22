@@ -26,12 +26,13 @@ def save_model(model, file_name):
     return
 
 
-def build_two_hop_adj(device, adj, adj_u_i, args, num_users, num_items):
+def build_score(device, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
     adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool()
     adj_u_i = adj_u_i.bool()
+
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
@@ -84,19 +85,30 @@ def build_two_hop_adj(device, adj, adj_u_i, args, num_users, num_items):
         raise Exception('check BaseLine loading! No Embedding loaded.')
 
     score = user_embed @ item_embed.T
-    score_insert = score * adj_insert
 
-    del adj_insert, score, user_embed, item_embed
+    del user_embed, item_embed, baseline
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
 
-    add_num_row = (torch.count_nonzero(score_insert, 1) * args.k).int()
+    score = score * adj_insert
+
+    del adj_insert
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
+
+    return score
+
+
+def build_two_hop_adj(device, adj, score, args, num_users):
+
+    add_num_row = (torch.count_nonzero(score, 1) * args.k).int()
     add_num_row = add_num_row.detach().cpu().numpy()
     insert_ind = []
 
     for idx in range(len(add_num_row)):
-        _, col_idx = torch.topk(score_insert[idx], add_num_row[idx])
+        _, col_idx = torch.topk(score[idx], add_num_row[idx])
         if col_idx.nelement() != 0:  # check the col_idx is empty
             insert_ind.append(torch.stack([torch.tensor(idx).repeat(len(col_idx)).to(device), col_idx], 0))
 

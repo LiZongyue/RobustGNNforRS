@@ -107,10 +107,9 @@ if not args.train_baseline:
         adj_2_hops = torch.load(adj_path, map_location='cpu')
         adj_2_hops = adj_2_hops.to(device)
     else:
-        adj_2_hops = \
-            utils.build_two_hop_adj(device, adj,
-                                    utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
-                                    args, num_users, num_items)
+        scores = utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
+                                   args, num_users, num_items)
+        adj_2_hops = utils.build_two_hop_adj(device, adj, scores, args, num_users)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
         torch.save(adj_2_hops, adj_path)
