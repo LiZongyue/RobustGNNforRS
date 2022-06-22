@@ -150,6 +150,11 @@ def score_builder(scores, adj_insert_list, device):
             torch.cuda.empty_cache()
         gc.collect()
     scores_list.append(scores[(idx + 1) * 1000:, :] * adj_insert_list[0])
+    del adj_insert_list, scores
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
+
     scores = torch.cat(scores_list, 0)
     return scores
 
