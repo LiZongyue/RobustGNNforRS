@@ -30,6 +30,8 @@ def save_model(model, file_name):
 def build_score(device, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
+    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
     if os.path.exists(adj_path):
         adj_insert = torch.load(adj_path, map_location='cpu')
