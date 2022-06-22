@@ -109,20 +109,18 @@ if not args.train_baseline:
         adj_2_hops = torch.load(adj_path, map_location='cpu')
         adj_2_hops = adj_2_hops.to(device)
     else:
-        scores, adj_insert =\
-            utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
-                                args, num_users, num_items)
+        utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
+                            args, num_users, num_items)
         if device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
-        scores = utils.score_builder(scores, adj_insert, device)
+        utils.score_builder()
         ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
-        if os.path.exists(ori_adj_path):
-            adj = torch.load(ori_adj_path, map_location='cpu').to(device)
-        else:
+        if not os.path.exists(ori_adj_path):
             adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
             torch.save(adj, ori_adj_path)
-        adj_2_hops = utils.build_two_hop_adj(device, adj, scores, args, num_users)
+
+        adj_2_hops = utils.build_two_hop_adj(device, args, num_users)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
         torch.save(adj_2_hops, adj_path)

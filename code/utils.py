@@ -34,14 +34,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
     score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores.pt'
-    if os.path.exists(adj_path):
-        adj_insert = torch.load(adj_path, map_location='cpu')
-        adj_insert = adj_insert.to(device)
-        del adj_u_i
-        if device != 'cpu':
-            torch.cuda.empty_cache()
-        gc.collect()
-    else:
+    if not os.path.exists(adj_path):
         print("Starting calculate 3 hops neighbours...")
         adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
         adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i)
@@ -68,11 +61,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
 
         torch.save(adj_insert, adj_path)
 
-    if os.path.exists(score_path):
-        score = torch.load(score_path, map_location='cpu')
-        score = score.to(device)
-
-    else:
+    if not os.path.exists(score_path):
         # import calibrated GNN model and utilize its embeddings for topK
         local_path = os.path.abspath(os.path.dirname(os.getcwd()))
         user_embed, item_embed = None, None
@@ -115,29 +104,24 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         score = user_embed @ item_embed.T
         torch.save(score, score_path)
 
-    return score, adj_insert
 
-
-def score_builder(scores, adj_insert, device):
+def score_builder():
     score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
-    if os.path.exists(score_filtered_path):
-        score = torch.load(score_filtered_path, map_location='cpu')
-        score = score.to(device)
-    else:
+    if not os.path.exists(score_filtered_path):
+        adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
+        score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores.pt'
+        adj_insert = torch.load(adj_insert_path)
+        scores = torch.load(score_path)
         score = adj_insert * scores
         torch.save(score, score_filtered_path)
 
-    del adj_insert, scores
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
 
-    return score
-
-
-def build_two_hop_adj(device, adj, score, args, num_users):
-
-    add_num_row = (torch.count_nonzero(score, 1) * args.k).int()
+def build_two_hop_adj(device, args, num_users):
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
+    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
+    score = torch.load(score_filtered_path, map_location='cpu').to(device)
+    row_num = torch.count_nonzero(score, 1)
+    add_num_row = (row_num * args.k).int()
     add_num_row = add_num_row.detach().cpu().numpy()
     insert_ind = []
 
@@ -151,6 +135,7 @@ def build_two_hop_adj(device, adj, score, args, num_users):
     ind_up_tri = torch.stack((insert_ind[0], insert_ind[1].clone() + num_users))
     ind_down_tri = ind_up_tri.clone()
     ind_down_tri[[1, 0]] = ind_down_tri.clone()
+    adj = torch.load(ori_adj_path, map_location='cpu').to(device)
     ind = torch.cat([ind_up_tri, ind_down_tri, adj.coalesce().indices()], -1)
     adj_2_hops = torch.sparse_coo_tensor(ind, torch.ones(ind.shape[1]), adj.shape).to(device)
 
