@@ -36,6 +36,10 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     if os.path.exists(adj_path):
         adj_insert = torch.load(adj_path, map_location='cpu')
         adj_insert = adj_insert.to(device)
+        del adj_u_i
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
     else:
         print("Starting calculate 3 hops neighbours...")
         adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
@@ -63,12 +67,13 @@ def build_score(device, adj_u_i, args, num_users, num_items):
 
         torch.save(adj_insert, adj_path)
 
-    chunk_size = 1000
-    adj_insert_list = []
-    for chunk_i in range(1, int(adj_insert.shape[0] / chunk_size) + 1):
-        adj_insert_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
-        adj_insert_list.append(adj_insert_i)
-    adj_insert_list.append(adj_insert[chunk_i * chunk_size:, :])
+    # chunk_size = 1000
+    # adj_insert_list = []
+    # for chunk_i in range(1, int(adj_insert.shape[0] / chunk_size) + 1):
+    #     adj_insert_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
+    #     adj_insert_list.append(adj_insert_i)
+    # adj_insert_list.append(adj_insert[chunk_i * chunk_size:, :])
+    adj_insert_list = list(torch.split(adj_insert, 1000))
 
     del adj_insert
     if device != 'cpu':
