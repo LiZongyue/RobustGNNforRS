@@ -7,6 +7,7 @@ from torch import nn, optim
 import numpy as np
 from dataloader import BasicDataset
 from time import time
+import time as timesleeper
 from model import PairWiseModel
 from sklearn.metrics import roc_auc_score
 import os
@@ -36,6 +37,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
+    timesleeper.sleep(5)
     adj_after_2_hops = torch.sparse.mm(adj_u_i.t(), adj_after_1_hops.t()).t()
 
     del adj_after_1_hops
