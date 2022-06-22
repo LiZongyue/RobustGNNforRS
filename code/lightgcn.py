@@ -1,6 +1,7 @@
 import torch
 import os
 from torch import nn, optim
+import torch.nn.functional as F
 import numpy as np
 from register import dataset
 import utils
@@ -185,10 +186,10 @@ class LightGCN(nn.Module):
 
         else:
             # pos score
-            pos_score = torch.exp(torch.sum(users_emb * pos_emb, dim=-1))
-            # neg score
-            neg_score = torch.exp(torch.sum(users_emb * neg_emb, dim=-1))
-            loss = torch.mean(torch.nn.functional.softplus(neg_score - pos_score))
+            pos_scores = torch.sum(torch.mul(users_emb, pos_emb), dim=1)
+            neg_scores = torch.sum(torch.mul(users_emb, neg_emb), dim=1)
+
+            loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
 
         reg_loss = (1 / 2) * (userEmb0.norm(2).pow(2) +
                               posEmb0.norm(2).pow(2)) / float(len(users))

@@ -22,6 +22,7 @@ class NGCF(nn.Module):
         self._is_sparse = sparse
         self.is_gcmc = is_gcmc
         self.use_dcl = use_dcl
+        # self.mess_dropout = [0.1, 0.1]
 
         self.tau_plus = 1e-3
         self.T = 0.07
@@ -89,13 +90,26 @@ class NGCF(nn.Module):
         rating = self.f(torch.matmul(users_emb, items_emb.t()))
         return rating
 
+    def sparse_dropout(self, x, rate, noise_shape):
+        random_tensor = 1 - rate
+        random_tensor += torch.rand(noise_shape).to(x.device)
+        dropout_mask = torch.floor(random_tensor).type(torch.bool)
+        i = x._indices()
+        v = x._values()
+
+        i = i[:, dropout_mask]
+        v = v[dropout_mask]
+
+        out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
+        return out * (1. / (1 - rate))
+
     def computer(self, adj):
         # TODO: override lightGCN here
         """
         propagate methods for lightGCN
         """
 
-        g_droped = adj
+        g_droped = self.sparse_dropout(adj, 0.2, adj._nnz())
 
         all_emb = torch.cat([self.embedding_dict['user_emb'], self.embedding_dict['item_emb']], 0)
         all_embedding = [all_emb]
@@ -217,15 +231,16 @@ class NGCF(nn.Module):
 
             loss = (-torch.log(pos / (pos + Ng))).mean()
 
-        else:
-            # pos score
-            pos_score = torch.exp(torch.sum(users_emb * pos_emb, dim=-1))
-            # neg score
-            neg_score = torch.exp(torch.sum(users_emb * neg_emb, dim=-1))
-            loss = torch.mean(torch.nn.functional.softplus(neg_score - pos_score))
+            reg_loss = (1 / 2) * (userEmb0.norm(2).pow(2) +
+                                  posEmb0.norm(2).pow(2)) / float(len(users))
 
-        reg_loss = (1 / 2) * (userEmb0.norm(2).pow(2) +
-                              posEmb0.norm(2).pow(2)) / float(len(users))
+        else:
+            pos_scores = torch.sum(torch.mul(users_emb, pos_emb), dim=1)
+            neg_scores = torch.sum(torch.mul(users_emb, neg_emb), dim=1)
+
+            loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
+
+            reg_loss = (torch.norm(users_emb) ** 2 + torch.norm(pos_emb) ** 2 + torch.norm(neg_emb) ** 2) / 2
 
         return loss, reg_loss
 
