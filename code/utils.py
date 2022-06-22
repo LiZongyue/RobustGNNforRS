@@ -30,7 +30,15 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
-    adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool()
+    adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
+    adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i)
+
+    del adj_after_1_hops
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
+
+    adj_after_2_hops = adj_after_2_hops.bool()
     adj_u_i = adj_u_i.bool()
 
     if device != 'cpu':
@@ -48,8 +56,8 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     chunk_size = 1000
     adj_insert_list = []
     for chunk_i in range(1, int(adj_insert.shape[0] / chunk_size) + 1):
-        score_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
-        adj_insert_list.append(score_i)
+        adj_insert_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
+        adj_insert_list.append(adj_insert_i)
     adj_insert_list.append(adj_insert[chunk_i * chunk_size:, :])
 
     del adj_insert
@@ -82,16 +90,16 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         baseline = lightgcn.LightGCN(device)
         baseline.load_state_dict(torch.load(path))
         baseline = baseline.to(device)
-        user_embed = baseline.embedding_user.data
-        item_embed = baseline.embedding_item.data
+        user_embed = baseline.embedding_user.weight
+        item_embed = baseline.embedding_item.weight
     if args.baseline == 'LR-GCCF':
         print('loading baseline Model LR-GCCF...')
         path = local_path + '/models/gccf_baseline.ckpt'
         baseline = lightgcn.LightGCN(device, is_light_gcn=False)
         baseline.load_state_dict(torch.load(path))
         baseline = baseline.to(device)
-        user_embed = baseline.embedding_user.data
-        item_embed = baseline.embedding_item.data
+        user_embed = baseline.embedding_user.weight
+        item_embed = baseline.embedding_item.weight
 
     if user_embed is None or item_embed is None:
         raise Exception('check BaseLine loading! No Embedding loaded.')
