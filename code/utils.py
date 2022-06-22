@@ -38,6 +38,12 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         torch.cuda.empty_cache()
     gc.collect()
 
+    adj_after_2_hops = adj_after_2_hops.to_dense()
+
+    if device != 'cpu':
+        torch.cuda.empty_cache()
+    gc.collect()
+
     adj_after_2_hops = adj_after_2_hops.bool()
     adj_u_i = adj_u_i.bool()
 
