@@ -97,8 +97,10 @@ torch.manual_seed(args.seed)
 
 if device != 'cpu':
     torch.cuda.manual_seed(args.seed)
+    torch.cuda.empty_cache()
+gc.collect()
 
-adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
+adj = None
 
 if not args.train_baseline:
     print("Constructing Adj_insert tensor...")
@@ -114,12 +116,15 @@ if not args.train_baseline:
             torch.cuda.empty_cache()
         gc.collect()
         scores = utils.score_builder(scores_list, adj_insert_list, device)
+        adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
         adj_2_hops = utils.build_two_hop_adj(device, adj, scores, args, num_users)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
         torch.save(adj_2_hops, adj_path)
     print("Construction finished!")
 
+if adj is None:
+    adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
 net = dataset.Graph
 
 # adj matrix only contains users and items
