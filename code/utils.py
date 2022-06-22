@@ -30,13 +30,15 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
-    adj_after_1_hops = torch.sparse.mm(adj_u_i, adj_u_i.t()).to_dense()
+    adj_after_1_hops = torch.sparse.mm(adj_u_i, adj_u_i.t())
+    adj_after_1_hop = adj_after_1_hops.to_dense()
+    del adj_after_1_hops
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
-    adj_after_2_hops = torch.sparse.mm(adj_u_i.t(), adj_after_1_hops.t()).t()
+    adj_after_2_hops = torch.sparse.mm(adj_u_i.t(), adj_after_1_hop.t()).t()
 
-    del adj_after_1_hops
+    del adj_after_1_hop
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
