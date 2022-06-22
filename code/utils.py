@@ -48,7 +48,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     chunk_size = 1000
     adj_insert_list = []
     for chunk_i in range(1, int(adj_insert.shape[0] / chunk_size) + 1):
-        score_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :]
+        score_i = adj_insert[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
         adj_insert_list.append(score_i)
     adj_insert_list.append(adj_insert[chunk_i * chunk_size:, :])
 
@@ -103,23 +103,31 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         torch.cuda.empty_cache()
     gc.collect()
     chunk_size = 1000
-    scores = []
-    for chunk_i in range(1, int(score.shape[0] / chunk_size) + 1):
-        score_i = score[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :] * adj_insert_list[0]
-        scores.append(score_i)
-        del adj_insert_list[0]
-        if device != 'cpu':
-            torch.cuda.empty_cache()
-        gc.collect()
+    scores_list = []
 
-    scores.append(score[(chunk_i) * chunk_size:, :] * adj_insert_list[0])
-    del adj_insert_list[-1], score
+    for chunk_i in range(1, int(score.shape[0] / chunk_size) + 1):
+        score_i = score[(chunk_i - 1) * chunk_size:chunk_i * chunk_size, :].clone()
+        scores_list.append(score_i)
+    scores_list.append(score[(chunk_i) * chunk_size:, :])
+    del score
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
 
-    score = torch.cat(scores, 0)
-    return score
+    return scores_list, adj_insert_list
+
+
+def score_builder(scores_list, adj_insert_list, device):
+    scores = []
+    for idx in range(len(scores_list)):
+        print('{}_th element in both lists'.format(idx))
+        scores.append(scores_list[0] * adj_insert_list[0])
+        del scores_list[0], adj_insert_list[0]
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+    scores = torch.cat(scores, 0)
+    return scores
 
 
 def build_two_hop_adj(device, adj, score, args, num_users):
