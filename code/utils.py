@@ -26,13 +26,12 @@ def save_model(model, file_name):
     return
 
 
-def build_two_hop_adj(device, adj, adj_u_i, args, num_users, num_items):
+def build_two_hop_adj(device, adj, adj_u_i, adj_u_i_s, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
     adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool().float()
     print("Neighbours calculation finished!")
-    adj_u_i_s = adj_u_i.to_sparse()
 
     del adj_u_i
     gc.collect()
