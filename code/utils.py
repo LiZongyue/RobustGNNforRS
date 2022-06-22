@@ -30,35 +30,42 @@ def save_model(model, file_name):
 def build_score(device, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
-    print("Starting calculate 3 hops neighbours...")
-    tmp = adj_u_i.to_dense()
-    adj_after_1_hops = torch.sparse.mm(adj_u_i, tmp.t())
-    del tmp
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
-    timesleeper.sleep(5)
-    adj_after_2_hops = torch.sparse.mm(adj_u_i.t(), adj_after_1_hops.t()).t()
+    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
+    if os.path.exists(adj_path):
+        adj_insert = torch.load(adj_path, map_location='cpu')
+        adj_insert = adj_insert.to(device)
+    else:
+        print("Starting calculate 3 hops neighbours...")
+        tmp = adj_u_i.to_dense()
+        adj_after_1_hops = torch.sparse.mm(adj_u_i, tmp.t())
+        del tmp
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+        timesleeper.sleep(5)
+        adj_after_2_hops = torch.sparse.mm(adj_u_i.t(), adj_after_1_hops.t()).t()
 
-    del adj_after_1_hops
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
+        del adj_after_1_hops
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
 
-    adj_after_2_hops = adj_after_2_hops.bool()
-    adj_u_i = adj_u_i.bool()
+        adj_after_2_hops = adj_after_2_hops.bool()
+        adj_u_i = adj_u_i.bool()
 
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
-    print("Neighbours calculation finished!")
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+        print("Neighbours calculation finished!")
 
-    adj_insert = adj_after_2_hops ^ adj_u_i  # subtraction (XOR)
+        adj_insert = adj_after_2_hops ^ adj_u_i  # subtraction (XOR)
 
-    del adj_after_2_hops, adj_u_i
-    if device != 'cpu':
-        torch.cuda.empty_cache()
-    gc.collect()
+        del adj_after_2_hops, adj_u_i
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+
+        torch.save(adj_insert, adj_path)
 
     chunk_size = 1000
     adj_insert_list = []
