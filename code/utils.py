@@ -26,21 +26,16 @@ def save_model(model, file_name):
     return
 
 
-def build_two_hop_adj(device, adj, adj_u_i, adj_u_i_s, args, num_users, num_items):
+def build_two_hop_adj(device, adj, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
     print("Starting calculate 3 hops neighbours...")
     adj_after_2_hops = torch.mm(torch.mm(adj_u_i, adj_u_i.t()), adj_u_i).bool().float()
     print("Neighbours calculation finished!")
 
-    del adj_u_i
-    gc.collect()
-    if device != 'cpu':
-        torch.cuda.empty_cache()
+    adj_insert = (adj_after_2_hops - adj_u_i).bool()
 
-    adj_insert = (adj_after_2_hops - adj_u_i_s).bool()
-
-    del adj_after_2_hops, adj_u_i_s
+    del adj_after_2_hops, adj_u_i
     if device != 'cpu':
         torch.cuda.empty_cache()
     gc.collect()
