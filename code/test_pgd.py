@@ -170,7 +170,7 @@ if args.model_ngcf:
     print("train model NGCF")
     print("=================================================")
 
-    Recmodel = ngcf_ori.NGCF(device, num_users, num_items)
+    Recmodel = ngcf_ori.NGCF(device, num_users, num_items, train_groc=True)
     Recmodel = Recmodel.to(device)
 
     groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)

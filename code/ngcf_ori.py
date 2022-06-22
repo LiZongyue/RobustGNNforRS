@@ -123,7 +123,7 @@ class NGCF(nn.Module):
             # normalize the distribution of embeddings.
             norm_embeddings = F.normalize(ego_embeddings, p=2, dim=1)
             if self.is_gcmc:
-                mlp_embeddings = torch.matmul(norm_embeddings, self.weights['W_mlp_%d' % k]) + self.weights['b_mlp_%d' % k]
+                mlp_embeddings = torch.matmul(norm_embeddings, self.weight_dict['W_mlp_%d' % k]) + self.weight_dict['b_mlp_%d' % k]
                 # mlp_embeddings = torch.dropout(mlp_embeddings, 1 - self.mess_dropout[k])
                 all_embedding += [mlp_embeddings]
             else:
