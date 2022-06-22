@@ -125,7 +125,7 @@ class LightGCN(nn.Module):
         pos_emb = all_items[pos_items]
         # neg_emb = all_items[neg_items]
         users_emb_ego = self.embedding_user(users)
-        pos_emb_ego = self.embedding_item.data(pos_items)
+        pos_emb_ego = self.embedding_item(pos_items)
         # neg_emb_ego = self.embedding_item(neg_items)
         if neg_items is None:
             return users_emb, pos_emb, users_emb_ego, pos_emb_ego
