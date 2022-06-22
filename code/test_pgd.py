@@ -110,7 +110,7 @@ if not args.train_baseline:
         adj_2_hops = adj_2_hops.to(device)
     else:
         scores_list, adj_insert_list =\
-            utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
+            utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device),
                                 args, num_users, num_items)
         if device != 'cpu':
             torch.cuda.empty_cache()
