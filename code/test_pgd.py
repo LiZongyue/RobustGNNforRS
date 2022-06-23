@@ -94,7 +94,7 @@ print("=================================================")
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
-
+net = dataset.getSparseGraph()
 if device != 'cpu':
     torch.cuda.manual_seed(args.seed)
     torch.cuda.empty_cache()
@@ -129,7 +129,6 @@ if not args.train_baseline:
         torch.save(adj_2_hops, adj_path)
     print("Construction finished!")
 
-net = dataset.Graph
 if adj is None:
     ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
     if not os.path.exists(ori_adj_path):
@@ -149,7 +148,7 @@ indices_diag = np.vstack((idx, idx))
 
 i_d = torch.LongTensor(indices_diag).to(device)
 v_d = torch.FloatTensor(val_diag.detach().cpu()).to(device)
-shape = net.shape
+shape = adj.shape
 
 d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
 
