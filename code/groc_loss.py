@@ -95,21 +95,22 @@ class GROC_loss(nn.Module):
 
         adj_with_insert = self.ori_adj + where_to_insert / num_insert
 
-        return adj_with_insert
+        return adj_with_insert, num_insert
 
     def get_modified_adj_with_insert_and_remove_by_gradient(self, remove_prob, insert_prob, batch_users_unique,
-                                                            edge_gradient, adj_with_insert):
-
+                                                            edge_gradient, adj_with_insert, num_insert):
+        start = time.time()
         i = torch.stack((batch_users_unique, batch_users_unique))
         v = torch.ones(i.shape[1]).to(self.device)
         batch_nodes_in_matrix = torch.sparse_coo_tensor(i, v, self.ori_adj.shape).to(self.device)
 
         ori_adj_ind = self.ori_adj.coalesce().indices()
         k_remove = int(remove_prob * torch.sparse.sum(torch.sparse.mm(batch_nodes_in_matrix, self.ori_adj)))
-        k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
+        # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
+        k_insert = int(insert_prob * num_insert)
 
         # filter added weighted edges, use element-wise multiplication (.mul() for sparse tensor)
-        start = time.time()
+
         edge_gradient_matrix = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient).mul(self.ori_adj)
 
         # only remove edges that are related to the current batch
@@ -120,23 +121,19 @@ class GROC_loss(nn.Module):
         # mask generation
         mask_rm = torch.ones(ori_adj_ind.shape[1]).bool().to(self.device)
         mask_rm[ind_rm] = False
-        tok = time.time()
-        print('time consumption of remove indices: ', tok - start)
-
-        start = time.time()
-        edge_gradient_ir = edge_gradient.mul(adj_with_insert - self.ori_adj)
-        tok = time.time()
-        print('time consumption of * OP: ', tok - start)
+        tik = time.time()
+        edge_gradient_ir = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient).mul(adj_with_insert - self.ori_adj)
         _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
+        tok = time.time()
+        print('time consumption of * OP: ', tok - tik)
 
         ind_rm_ir = edge_gradient_ir.coalesce().indices()[:, indices_ir]
         ind_rm_ir = torch.cat((self.ori_adj.coalesce().indices()[:, mask_rm], ind_rm_ir), -1)
         val_rm_ir = torch.ones(ind_rm_ir.shape[1]).to(self.device)
-        tok = time.time()
-        print('time consumption of insert indices: ', tok - start)
 
         adj_insert_remove = torch.sparse_coo_tensor(ind_rm_ir, val_rm_ir, self.ori_adj.shape).to(self.device)
-
+        end = time.time()
+        print('time consumption of one batch: ', end - start)
         return adj_insert_remove
 
     def attack_adjs(self, adj_a, adj_b, perturbations, users, posItems, negItems):
@@ -851,7 +848,7 @@ class GROC_loss(nn.Module):
 
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
 
-        adj_with_insert = self.get_modified_adj_for_insert(batch_users_unique,
+        adj_with_insert, num_insert = self.get_modified_adj_for_insert(batch_users_unique,
                                                            self.adj_with_2_hops)  # 2 views are same
 
         # Normalize perturbed adj (with insertion)
@@ -868,13 +865,13 @@ class GROC_loss(nn.Module):
                                                                                        self.args.remove_prob_1,
                                                                                        batch_users_unique,
                                                                                        edge_gradient,
-                                                                                       adj_with_insert)
+                                                                                       adj_with_insert, num_insert)
 
         adj_insert_remove_2 = self.get_modified_adj_with_insert_and_remove_by_gradient(self.args.insert_prob_2,
                                                                                        self.args.remove_prob_2,
                                                                                        batch_users_unique,
                                                                                        edge_gradient,
-                                                                                       adj_with_insert)
+                                                                                       adj_with_insert, num_insert)
 
         adj_norm_1 = utils.normalize_adj_tensor(adj_insert_remove_1, self.d_mtr, sparse=True)
         adj_norm_2 = utils.normalize_adj_tensor(adj_insert_remove_2, self.d_mtr, sparse=True)
