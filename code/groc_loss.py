@@ -102,7 +102,7 @@ class GROC_loss(nn.Module):
 
     def get_modified_adj_with_insert_and_remove_by_gradient(self, remove_prob, insert_prob, batch_users_unique,
                                                             edge_gradient, adj_with_insert):
-        tik = time.time()
+
         i = torch.stack((batch_users_unique, batch_users_unique))
         v = torch.ones(i.shape[1]).to(self.device)
         batch_nodes_in_matrix = torch.sparse_coo_tensor(i, v, self.ori_adj.shape).to(self.device)
@@ -110,27 +110,33 @@ class GROC_loss(nn.Module):
         ori_adj_ind = self.ori_adj.coalesce().indices()
         k_remove = int(remove_prob * torch.sparse.sum(torch.sparse.mm(batch_nodes_in_matrix, self.ori_adj)))
         k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
-        # TODO: check why normalize gradient? Useless?
-        # edge_gradient_remove_norm = torch.sparse.mm(self.d_mtr, edge_gradient)
-        # edge_gradient_remove_norm = torch.sparse.mm(edge_gradient_remove_norm, self.d_mtr).to_dense().to(self.device)
-        tok = time.time()
-        print('time consumption of k_remove/ k_insert: ', tok - tik)
+
         # filter added weighted edges, use element-wise multiplication (.mul() for sparse tensor)
-        tik = time.time()
+        start = time.time()
         edge_gradient_rm = edge_gradient.mul(self.ori_adj)
+        tok = time.time()
+        print('time consumption of * OP: ', tok - start)
         # only remove edges that are related to the current batch
+        tik = time.time()
         edge_gradient_matrix = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient_rm)
+        tok = time.time()
+        print('time consumption of @ OP: ', tok - tik)
         # according to gradient value, find out edges indices that have min. gradients
+        tik = time.time()
         edge_gradient_batch = edge_gradient_matrix.coalesce().values()
+        tok = time.time()
+        print('time consumption of getting index of sp tensor: ', tok - tik)
         _, ind_rm = torch.topk(edge_gradient_batch, k_remove, largest=False)
+        end = time.time()
+        print('time consumption of topk: ', end - tok)
 
         # mask generation
         mask_rm = torch.ones(ori_adj_ind.shape[1]).bool().to(self.device)
         mask_rm[ind_rm] = False
         tok = time.time()
-        print('time consumption of remove indices: ', tok - tik)
+        print('time consumption of remove indices: ', tok - start)
 
-        tik = time.time()
+        start = time.time()
         edge_gradient_ir = edge_gradient.mul(adj_with_insert - self.ori_adj)
 
         _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
@@ -139,21 +145,18 @@ class GROC_loss(nn.Module):
         ind_rm_ir = torch.cat((self.ori_adj.coalesce().indices()[:, mask_rm], ind_rm_ir), -1)
         val_rm_ir = torch.ones(ind_rm_ir.shape[1]).to(self.device)
         tok = time.time()
-        print('time consumption of insert indices: ', tok - tik)
+        print('time consumption of insert indices: ', tok - start)
 
-        tik = time.time()
         adj_insert_remove = torch.sparse_coo_tensor(ind_rm_ir, val_rm_ir, self.ori_adj.shape).to(self.device)
-        tok = time.time()
-        print('time consumption of adj_insert_remove construction: ', tok - tik)
 
-        tik = time.time()
-        del edge_gradient, ori_adj_ind, edge_gradient_matrix, edge_gradient_ir, edge_gradient_rm, edge_gradient_batch
-        del mask_rm, indices_ir, ind_rm, ind_rm_ir, val_rm_ir
-        if self.device != 'cpu':
-            torch.cuda.empty_cache()
-        gc.collect()
-        tok = time.time()
-        print('time consumption of garbage collection: ', tok - tik)
+        # tik = time.time()
+        # del edge_gradient, ori_adj_ind, edge_gradient_matrix, edge_gradient_ir, edge_gradient_rm, edge_gradient_batch
+        # del mask_rm, indices_ir, ind_rm, ind_rm_ir, val_rm_ir
+        # if self.device != 'cpu':
+        #     torch.cuda.empty_cache()
+        # gc.collect()
+        # tok = time.time()
+        # print('time consumption of garbage collection: ', tok - tik)
 
         return adj_insert_remove
 
