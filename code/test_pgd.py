@@ -210,12 +210,11 @@ if args.model_ngcf:
                                   args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
     Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
 
-
 if args.model_lightgcn:
     print("train model LightGCN")
     print("=================================================")
 
-    Recmodel = lightgcn.LightGCN(device, use_dcl=False, train_groc=True)
+    Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False, train_groc=True)
     Recmodel = Recmodel.to(device)
 
     groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)

@@ -3,12 +3,11 @@ import os
 from torch import nn, optim
 import torch.nn.functional as F
 import numpy as np
-from register import dataset
 import utils
 
 
 class LightGCN(nn.Module):
-    def __init__(self, device=None, sparse=True, is_light_gcn=True, use_dcl=True, train_groc=False):
+    def __init__(self, device, n_user, m_item, sparse=True, is_light_gcn=True, use_dcl=True, train_groc=False):
         super(LightGCN, self).__init__()
 
         assert device is not None, "Please specify 'device'!"
@@ -16,8 +15,8 @@ class LightGCN(nn.Module):
         self.lr = 0.001
         self.weight_decay = 1e-4
         self.n_layers = 3
-        self.num_users = dataset.n_user
-        self.num_items = dataset.m_item
+        self.num_users = n_user
+        self.num_items = m_item
         self.adj_shape = self.num_users + self.num_items
         self.latent_dim = 64
         self.f = nn.Sigmoid()
