@@ -95,9 +95,6 @@ class GROC_loss(nn.Module):
 
         adj_with_insert = self.ori_adj + where_to_insert / num_insert
 
-        del where_to_insert
-        gc.collect()
-
         return adj_with_insert
 
     def get_modified_adj_with_insert_and_remove_by_gradient(self, remove_prob, insert_prob, batch_users_unique,
@@ -127,7 +124,7 @@ class GROC_loss(nn.Module):
         print('time consumption of remove indices: ', tok - start)
 
         start = time.time()
-        edge_gradient_ir = (adj_with_insert - self.ori_adj).mul(edge_gradient)
+        edge_gradient_ir = edge_gradient.mul(adj_with_insert - self.ori_adj)
         tok = time.time()
         print('time consumption of * OP: ', tok - start)
         _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
@@ -139,15 +136,6 @@ class GROC_loss(nn.Module):
         print('time consumption of insert indices: ', tok - start)
 
         adj_insert_remove = torch.sparse_coo_tensor(ind_rm_ir, val_rm_ir, self.ori_adj.shape).to(self.device)
-
-        # tik = time.time()
-        # del edge_gradient, ori_adj_ind, edge_gradient_matrix, edge_gradient_ir, edge_gradient_rm, edge_gradient_batch
-        # del mask_rm, indices_ir, ind_rm, ind_rm_ir, val_rm_ir
-        # if self.device != 'cpu':
-        #     torch.cuda.empty_cache()
-        # gc.collect()
-        # tok = time.time()
-        # print('time consumption of garbage collection: ', tok - tik)
 
         return adj_insert_remove
 
@@ -876,8 +864,6 @@ class GROC_loss(nn.Module):
 
         edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
 
-        del adj_for_loss_gradient
-        gc.collect()
         adj_insert_remove_1 = self.get_modified_adj_with_insert_and_remove_by_gradient(self.args.insert_prob_1,
                                                                                        self.args.remove_prob_1,
                                                                                        batch_users_unique,
@@ -890,21 +876,12 @@ class GROC_loss(nn.Module):
                                                                                        edge_gradient,
                                                                                        adj_with_insert)
 
-        del adj_with_insert
-
         adj_norm_1 = utils.normalize_adj_tensor(adj_insert_remove_1, self.d_mtr, sparse=True)
         adj_norm_2 = utils.normalize_adj_tensor(adj_insert_remove_2, self.d_mtr, sparse=True)
 
-        del adj_insert_remove_1
-        del adj_insert_remove_2
-
-        gc.collect()
         groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
                                       mask_2=self.args.mask_prob_2)
-
-        del adj_norm_1
-        del adj_norm_2
 
         bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
         reg_loss = reg_loss * self.ori_model.weight_decay
