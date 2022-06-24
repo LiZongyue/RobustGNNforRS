@@ -131,9 +131,9 @@ d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
 users, posItems, negItems = utils.getTrainSet(dataset)
 users_val, posItems_val, negItems_val = utils.getTestSet(dataset)
 # comment for GPU code, only for debugging
-# users = users[:30]
-# posItems = posItems[:30]
-# negItems = negItems[:30]
+users = users[:2048]
+posItems = posItems[:2048]
+negItems = negItems[:2048]
 
 data_len = len(users)
 

@@ -726,6 +726,9 @@ class GROC_loss(nn.Module):
             aver_bpr_loss = aver_bpr_loss / total_batch
             aver_groc_loss = aver_groc_loss / total_batch
 
+            if self.device != 'cpu':
+                torch.cuda.empty_cache()
+            gc.collect()
             now = datetime.now()
 
             current_time = now.strftime("%H:%M:%S")
