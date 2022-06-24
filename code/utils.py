@@ -50,15 +50,15 @@ def load_baseline(args, model, local_path, device, num_users, num_items):
             baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
             baseline.load_state_dict(torch.load(path))
             baseline = baseline.to(device)
-            user_embed = baseline.embedding_user.data
-            item_embed = baseline.embedding_item.data
+            user_embed = baseline.embedding_user.weight
+            item_embed = baseline.embedding_item.weight
         elif model == 'LightGCN':
             path = local_path + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
             baseline = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
             baseline.load_state_dict(torch.load(path))
             baseline = baseline.to(device)
-            user_embed = baseline.embedding_user.data
-            item_embed = baseline.embedding_item.data
+            user_embed = baseline.embedding_user.weight
+            item_embed = baseline.embedding_item.weight
         else:
             raise Exception("Baseline Model Name Wrong.")
 
