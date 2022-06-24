@@ -725,7 +725,7 @@ class GROC_loss(nn.Module):
             aver_loss = aver_loss / total_batch
             aver_bpr_loss = aver_bpr_loss / total_batch
             aver_groc_loss = aver_groc_loss / total_batch
-
+            del loss, bpr_loss, groc_loss
             if self.device != 'cpu':
                 torch.cuda.empty_cache()
             gc.collect()
