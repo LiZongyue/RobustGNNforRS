@@ -196,17 +196,17 @@ if args.train_groc:
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, train_groc=True)
         model = args.model_ngcf
-    elif args.model_lightgcn:
+    if args.model_lightgcn:
         print("train model LightGCN")
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, train_groc=True)
         model = args.model_lightgcn
-    elif args.model_gcmc:
+    if args.model_gcmc:
         print("train model GCMC")
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, train_groc=True)
         model = args.model_gcmc
-    elif args.model_gccf:
+    if args.model_gccf:
         print("train model LR-GCCF")
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, train_groc=True)

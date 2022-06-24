@@ -66,7 +66,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         # import calibrated GNN model and utilize its embeddings for topK
         local_path = os.path.abspath(os.path.dirname(os.getcwd()))
         user_embed, item_embed = None, None
-        if args.baseline == 'NGCF':
+        if args.model_ngcf:
             print('loading baseline Model NGCF...')
             path = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items)
@@ -74,7 +74,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
             baseline = baseline.to(device)
             user_embed = baseline.embedding_dict["user_emb"].data
             item_embed = baseline.embedding_dict["item_emb"].data
-        if args.baseline == 'GCMC':
+        if args.model_gcmc:
             print('loading baseline Model GCMC...')
             path = local_path + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True)
@@ -82,7 +82,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
             baseline = baseline.to(device)
             user_embed = baseline.embedding_dict["user_emb"].data
             item_embed = baseline.embedding_dict["item_emb"].data
-        if args.baseline == 'lightGCN':
+        if args.model_lightgcn:
             print('loading baseline Model lightGCN...')
             path = local_path + '/models/{}/lightGCN_baseline.ckpt'.format(args.dataset)
             baseline = lightgcn.LightGCN(device, num_users, num_items)
@@ -90,7 +90,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
             baseline = baseline.to(device)
             user_embed = baseline.embedding_user.weight
             item_embed = baseline.embedding_item.weight
-        if args.baseline == 'LR-GCCF':
+        if args.model_gccf:
             print('loading baseline Model LR-GCCF...')
             path = local_path + '/models/{}/gccf_baseline.ckpt'.format(args.dataset)
             baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False)
