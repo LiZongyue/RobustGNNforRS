@@ -102,7 +102,6 @@ def build_score(device, adj_u_i, args, num_users, num_items):
 
     # import calibrated GNN model and utilize its embeddings for topK
     local_path = os.path.abspath(os.path.dirname(os.getcwd()))
-    user_embed, item_embed = None, None
     if args.model_ngcf:
         model = 'NGCF'
         user_embed, item_embed, score_path = load_baseline(args, model, local_path, device, num_users, num_items)
