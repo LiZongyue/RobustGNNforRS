@@ -113,22 +113,13 @@ class GROC_loss(nn.Module):
 
         # filter added weighted edges, use element-wise multiplication (.mul() for sparse tensor)
         start = time.time()
-        edge_gradient_rm = edge_gradient.mul(self.ori_adj)
+        edge_gradient_matrix = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient).mul(self.ori_adj)
         tok = time.time()
-        print('time consumption of * OP: ', tok - start)
+        print('time consumption of * and @ OPs: ', tok - start)
         # only remove edges that are related to the current batch
-        tik = time.time()
-        edge_gradient_matrix = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient_rm)
-        tok = time.time()
-        print('time consumption of @ OP: ', tok - tik)
         # according to gradient value, find out edges indices that have min. gradients
-        tik = time.time()
         edge_gradient_batch = edge_gradient_matrix.coalesce().values()
-        tok = time.time()
-        print('time consumption of getting index of sp tensor: ', tok - tik)
         _, ind_rm = torch.topk(edge_gradient_batch, k_remove, largest=False)
-        end = time.time()
-        print('time consumption of topk: ', end - tok)
 
         # mask generation
         mask_rm = torch.ones(ori_adj_ind.shape[1]).bool().to(self.device)
@@ -137,7 +128,7 @@ class GROC_loss(nn.Module):
         print('time consumption of remove indices: ', tok - start)
 
         start = time.time()
-        edge_gradient_ir = edge_gradient.mul(adj_with_insert - self.ori_adj)
+        edge_gradient_ir = (adj_with_insert - self.ori_adj).mul(edge_gradient)
 
         _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
 
