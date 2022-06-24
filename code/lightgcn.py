@@ -32,9 +32,9 @@ class LightGCN(nn.Module):
         self.T = 0.07
 
         self.embedding_user = torch.nn.Embedding(
-            num_embeddings=self.num_users, embedding_dim=self.latent_dim, sparse=True)
+            num_embeddings=self.num_users, embedding_dim=self.latent_dim)
         self.embedding_item = torch.nn.Embedding(
-            num_embeddings=self.num_items, embedding_dim=self.latent_dim, sparse=True)
+            num_embeddings=self.num_items, embedding_dim=self.latent_dim)
         if self.is_lightgcn:
             nn.init.xavier_uniform_(self.embedding_user.weight, gain=1)
             nn.init.xavier_uniform_(self.embedding_item.weight, gain=1)
