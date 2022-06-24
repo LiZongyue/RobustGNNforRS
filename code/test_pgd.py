@@ -251,7 +251,7 @@ if args.train_groc:
     if args.model_gccf:
         print("train model LR-GCCF")
         print("=================================================")
-        Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, train_groc=True)
+        Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False, is_light_gcn=False)
         model = 'GCCF'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)

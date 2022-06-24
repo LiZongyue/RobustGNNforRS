@@ -752,48 +752,48 @@ class GROC_loss(nn.Module):
             if (i + 1) % self.args.valid_freq == 0:
                 print('Starting validation')
                 eval_log.append("Valid Epoch: {}:".format(i))
-                with torch.no_grad():
-                    users_val = users_val.to(self.device)
-                    posItems_val = posItems_val.to(self.device)
-                    negItems_val = negItems_val.to(self.device)
-                    users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
-                    for (batch_i, (batch_users, batch_pos, batch_neg)) \
-                            in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
-                        val_loss, val_bpr_loss, val_dcl_loss = \
-                            self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse)
-                        val_aver_loss += val_loss.cpu().item()
-                        val_aver_bpr_loss += val_bpr_loss.cpu().item()
-                        val_aver_groc_loss += val_dcl_loss.cpu().item()
 
-                    val_aver_loss = val_aver_loss / total_val_batch
-                    val_aver_bpr_loss = val_aver_bpr_loss / total_val_batch
-                    val_aver_groc_loss = val_aver_groc_loss / total_val_batch
-                    save = False
+                users_val = users_val.to(self.device)
+                posItems_val = posItems_val.to(self.device)
+                negItems_val = negItems_val.to(self.device)
+                users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
+                for (batch_i, (batch_users, batch_pos, batch_neg)) \
+                        in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
+                    val_loss, val_bpr_loss, val_dcl_loss = \
+                        self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse)
+                    val_aver_loss += val_loss.cpu().item()
+                    val_aver_bpr_loss += val_bpr_loss.cpu().item()
+                    val_aver_groc_loss += val_dcl_loss.cpu().item()
 
-                    if val_max_groc_loss > val_aver_groc_loss and val_max_loss > val_aver_loss and val_max_bpr_loss > val_aver_bpr_loss:
-                        save = True
-                        eval_log.append(f'Valid loss score decreased from {val_max_loss} to {val_aver_loss}')
-                        eval_log.append(f'Valid bpr loss score decreased from {val_max_bpr_loss} to {val_aver_bpr_loss}')
-                        eval_log.append(f'Valid loss score decreased from {val_max_groc_loss} to {val_aver_groc_loss}')
+                val_aver_loss = val_aver_loss / total_val_batch
+                val_aver_bpr_loss = val_aver_bpr_loss / total_val_batch
+                val_aver_groc_loss = val_aver_groc_loss / total_val_batch
+                save = False
 
-                        val_max_groc_loss = val_aver_groc_loss
-                        val_max_loss = val_aver_loss
-                        val_max_bpr_loss = val_aver_bpr_loss
+                if val_max_groc_loss > val_aver_groc_loss and val_max_loss > val_aver_loss and val_max_bpr_loss > val_aver_bpr_loss:
+                    save = True
+                    eval_log.append(f'Valid loss score decreased from {val_max_loss} to {val_aver_loss}')
+                    eval_log.append(f'Valid bpr loss score decreased from {val_max_bpr_loss} to {val_aver_bpr_loss}')
+                    eval_log.append(f'Valid loss score decreased from {val_max_groc_loss} to {val_aver_groc_loss}')
 
-                    if save:
-                        utils.save_model(self.ori_model, checkpoint_file_name)
+                    val_max_groc_loss = val_aver_groc_loss
+                    val_max_loss = val_aver_loss
+                    val_max_bpr_loss = val_aver_bpr_loss
 
-                    now = datetime.now()
+                if save:
+                    utils.save_model(self.ori_model, checkpoint_file_name)
 
-                    current_time = now.strftime("%H:%M:%S")
-                    eval_log.append("Current Time = {}".format(current_time))
-                    eval_log.append("=======================")
-                    eval_log.append("Valid GROC Loss: {}".format(val_aver_loss))
-                    eval_log.append("Valid BPR Loss: {}".format(val_aver_bpr_loss))
-                    eval_log.append("Valid DCL Loss: {}".format(val_aver_groc_loss))
-                    eval_log.append("=========================")
+                now = datetime.now()
 
-                    utils.append_log_to_file(eval_log, i, log_file_name)
+                current_time = now.strftime("%H:%M:%S")
+                eval_log.append("Current Time = {}".format(current_time))
+                eval_log.append("=======================")
+                eval_log.append("Valid GROC Loss: {}".format(val_aver_loss))
+                eval_log.append("Valid BPR Loss: {}".format(val_aver_bpr_loss))
+                eval_log.append("Valid DCL Loss: {}".format(val_aver_groc_loss))
+                eval_log.append("=========================")
+
+                utils.append_log_to_file(eval_log, i, log_file_name)
 
     def groc_val_with_bpr(self, users, posItems, negItems, i):
         self.ori_model.eval()
@@ -860,14 +860,16 @@ class GROC_loss(nn.Module):
         # batch_items = batch_all_node[batch_all_node >= self.num_users] - self.num_users
 
         # Normalize perturbed adj (with insertion)
+
         adj_for_loss_gradient = utils.normalize_adj_tensor(adj_with_insert, self.d_mtr, sparse=True)
+        self.ori_adj.requires_grad = True
         loss_for_grad = ori_gcl_computing(self.ori_adj, self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
                                           self.args.mask_prob_2, query_groc=True)
 
-        edge_gradient = torch.autograd.grad(loss_for_grad, self.ori_model.adj, retain_graph=True)[0]
-
+        edge_gradient = torch.autograd.grad(loss_for_grad, self.ori_adj, retain_graph=True)[0]
+        self.ori_adj.requires_grad = False
         del adj_for_loss_gradient
         gc.collect()
 
