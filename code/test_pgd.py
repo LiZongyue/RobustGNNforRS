@@ -74,12 +74,15 @@ parser.add_argument('--max_nodes_per_hop',                 type=int,   default=2
 parser.add_argument('--node_percentage_list',                 type=list,   default=[0.25, 0.5, 0.75, 1],                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--node_percentage_list_index',         type=int,   default=0,                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--model_ngcf',                         type=bool,   default=False,                                                                                                                                                   help='mask embedding of users/items of GCN')
+parser.add_argument('--model_gccf',                         type=bool,   default=False,                                                                                                                                                   help='mask embedding of users/items of GCN')
+parser.add_argument('--model_gcmc',                         type=bool,   default=False,                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--model_lightgcn',                         type=bool,   default=False,                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--k',                                 type=float,   default=0.01,                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--valid_freq',                         type=int,   default=1,                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--save_to',                           type=str,   default='tmp',                                                                                                                                                   help='mask embedding of users/items of GCN')
 parser.add_argument('--val_batch_size',                 type=int,   default=2048,                                                                                                                                                help='BS.')
 parser.add_argument('--train_baseline',                 type=bool,   default=False,                                                                                                                                                help='BS.')
+parser.add_argument('--prepare_adj_data',                 type=bool,   default=False,                                                                                                                                                help='BS.')
 parser.add_argument('--baseline',                         type=str,   default='NGCF',                                                                                                                                                help='BS.')
 
 args = parser.parse_args()
@@ -101,10 +104,10 @@ if device != 'cpu':
     torch.cuda.empty_cache()
 gc.collect()
 adj = None
-if not args.train_baseline:
+if not args.prepare_adj_data:
     print("Constructing Adj_insert tensor...")
-    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_2_hops.pt'
-    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
+    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_2_hops.pt'.format(args.dataset)
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
     if os.path.exists(adj_path):
         adj_2_hops = torch.load(adj_path, map_location='cpu')
         adj_2_hops = adj_2_hops.to(device)
@@ -118,8 +121,8 @@ if not args.train_baseline:
         if device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
-        utils.score_builder(device)
-        utils.row_counter(device)
+        utils.score_builder(device, args)
+        utils.row_counter(device, args)
         if not os.path.exists(ori_adj_path):
             adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
             torch.save(adj, ori_adj_path)
@@ -131,7 +134,7 @@ if not args.train_baseline:
     print("Construction finished!")
 
 if adj is None:
-    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
     if not os.path.exists(ori_adj_path):
         adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
     else:
@@ -164,31 +167,53 @@ users_val, posItems_val, negItems_val = utils.getTestSet(dataset)
 data_len = len(users)
 
 if args.train_baseline:
-    # print("NGCF Baseline Model Calibration.")
-    # model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
-    # model = model.to(device)
-    # model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
-    #
-    # print("GCMC Baseline Model Calibration.")
-    # model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
-    # model = model.to(device)
-    # model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
+    if args.model_ngcf:
+        print("NGCF Baseline Model Calibration.")
+        model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+        model = model.to(device)
+        model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
+    if args.model_lightgcn:
+        print("GCMC Baseline Model Calibration.")
+        model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+        model = model.to(device)
+        model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
+    if args.model_gcmc:
+        print("LightGCN Baseline Model Calibration.")
+        model = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
+        model = model.to(device)
+        model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
+    if args.model_gccf:
+        print("LR-GCCF Baseline Model Calibration.")
+        model = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
+        model = model.to(device)
+        model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
 
-    print("LightGCN Baseline Model Calibration.")
-    model = lightgcn.LightGCN(device, use_dcl=False)
-    model = model.to(device)
-    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
+if args.train_groc:
+    Recmodel = None
+    model = None
+    if args.model_ngcf:
+        print("train model NGCF")
+        print("=================================================")
+        Recmodel = ngcf_ori.NGCF(device, num_users, num_items, train_groc=True)
+        model = args.model_ngcf
+    elif args.model_lightgcn:
+        print("train model LightGCN")
+        print("=================================================")
+        Recmodel = lightgcn.LightGCN(device, num_users, num_items, train_groc=True)
+        model = args.model_lightgcn
+    elif args.model_gcmc:
+        print("train model GCMC")
+        print("=================================================")
+        Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, train_groc=True)
+        model = args.model_gcmc
+    elif args.model_gccf:
+        print("train model LR-GCCF")
+        print("=================================================")
+        Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, train_groc=True)
+        model = args.model_gccf
+    if Recmodel is None:
+        raise Exception('No model for GROC to train.')
 
-    print("LR-GCCF Baseline Model Calibration.")
-    model = lightgcn.LightGCN(device, is_light_gcn=False, use_dcl=False)
-    model = model.to(device)
-    model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val)
-
-if args.model_ngcf:
-    print("train model NGCF")
-    print("=================================================")
-
-    Recmodel = ngcf_ori.NGCF(device, num_users, num_items, train_groc=True)
     Recmodel = Recmodel.to(device)
 
     groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
@@ -196,33 +221,7 @@ if args.model_ngcf:
 
     print("save model")
     torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
-               '/data/NGCF_after_GROC_{}.pt'.format(args.loss_weight_bpr))
-
-    print("===========================")
-    print("original model performance on original adjacency matrix:")
-    print("===========================")
-    Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
-    print("===========================")
-
-    print("ori model performance after GROC learning on modified adjacency matrix A:")
-    print("===========================")
-    modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
-                                  args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
-    Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
-
-if args.model_lightgcn:
-    print("train model LightGCN")
-    print("=================================================")
-
-    Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False, train_groc=True)
-    Recmodel = Recmodel.to(device)
-
-    groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
-    groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
-
-    print("save model")
-    torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
-               '/data/LightGCN_after_GROC_{}.pt'.format(args.loss_weight_bpr))
+               '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
 
     print("===========================")
     print("original model performance on original adjacency matrix:")
@@ -253,7 +252,7 @@ if args.random_perturb:
     Procedure.Test(dataset, Recmodel_, 1, utils.normalize_adj_tensor(modified_adj), None, 0)
     print("=================================================")
 
-if args.train_groc:
+if False:  # train_groc old code, to be optimized
     Recmodel = lightgcn.LightGCN(device)
     Recmodel = Recmodel.to(device)
     print("Train GROC loss")

@@ -41,7 +41,7 @@ class LightGCN(nn.Module):
             nn.init.normal_(self.embedding_user.weight, std=0.01)
             nn.init.normal_(self.embedding_item.weight, std=0.01)
 
-    def fit(self, adj, d, users, posItems, negItems, users_val, posItems_val, negItems_val):
+    def fit(self, adj, d, users, posItems, negItems, users_val, posItems_val, negItems_val, dataset):
         if self._is_sparse:
             if type(adj) is not torch.Tensor:
                 adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
@@ -58,7 +58,7 @@ class LightGCN(nn.Module):
                 adj_norm = utils.normalize_adj_tensor(adj)
                 adj = adj_norm.to(self.device)
 
-        self._train_with_val(adj, users, posItems, negItems, users_val, posItems_val, negItems_val)
+        self._train_with_val(adj, users, posItems, negItems, users_val, posItems_val, negItems_val, dataset)
 
     def getUsersRating(self, adj, users):
         all_users, all_items = self.computer(adj)
@@ -195,7 +195,7 @@ class LightGCN(nn.Module):
 
         return loss, reg_loss
 
-    def _train_with_val(self, adj, users, posItems, negItems, users_val, posItems_val, negItems_val):
+    def _train_with_val(self, adj, users, posItems, negItems, users_val, posItems_val, negItems_val, dataset):
         local_path = os.path.abspath(os.path.dirname(os.getcwd()))
         if not os.path.exists(local_path + '/models'):
             os.mkdir(local_path + '/models')
@@ -203,11 +203,11 @@ class LightGCN(nn.Module):
             os.mkdir(local_path + '/log')
 
         if self.is_lightgcn:
-            checkpoint_file_name = '{}/models/LightGCN_baseline.ckpt'.format(local_path)
-            log_file_name = '{}/log/LightGCN_baseline.log'.format(local_path)
+            checkpoint_file_name = '{}/models/{}/LightGCN_baseline.ckpt'.format(local_path, dataset)
+            log_file_name = '{}/log/{}/LightGCN_baseline.log'.format(local_path, dataset)
         else:
-            checkpoint_file_name = '{}/models/GCCF_baseline.ckpt'.format(local_path)
-            log_file_name = '{}/log/GCCF_baseline.log'.format(local_path)
+            checkpoint_file_name = '{}/models/{}/GCCF_baseline.ckpt'.format(local_path, dataset)
+            log_file_name = '{}/log/{}/GCCF_baseline.log'.format(local_path, dataset)
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         min_val_loss = float('Inf')
         for i in range(100):

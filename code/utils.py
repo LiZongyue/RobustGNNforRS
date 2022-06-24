@@ -7,7 +7,6 @@ from torch import nn, optim
 import numpy as np
 from dataloader import BasicDataset
 from time import time
-import time as timesleeper
 from model import PairWiseModel
 from sklearn.metrics import roc_auc_score
 import os
@@ -32,8 +31,8 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     # calculate 3 dense hop neighbors
     if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
         os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
-    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
-    score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores.pt'
+    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
+    score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores.pt'.format(args.dataset)
     if not os.path.exists(adj_path):
         print("Starting calculate 3 hops neighbours...")
         adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
@@ -67,7 +66,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         user_embed, item_embed = None, None
         if args.baseline == 'NGCF':
             print('loading baseline Model NGCF...')
-            path = local_path + '/models/NGCF_baseline.ckpt'
+            path = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items)
             baseline.load_state_dict(torch.load(path))
             baseline = baseline.to(device)
@@ -75,7 +74,7 @@ def build_score(device, adj_u_i, args, num_users, num_items):
             item_embed = baseline.embedding_dict["item_emb"].data
         if args.baseline == 'GCMC':
             print('loading baseline Model GCMC...')
-            path = local_path + '/models/GCMC_baseline.ckpt'
+            path = local_path + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True)
             baseline.load_state_dict(torch.load(path))
             baseline = baseline.to(device)
@@ -83,16 +82,16 @@ def build_score(device, adj_u_i, args, num_users, num_items):
             item_embed = baseline.embedding_dict["item_emb"].data
         if args.baseline == 'lightGCN':
             print('loading baseline Model lightGCN...')
-            path = local_path + '/models/lightGCN_baseline.ckpt'
-            baseline = lightgcn.LightGCN(device)
+            path = local_path + '/models/{}/lightGCN_baseline.ckpt'.format(args.dataset)
+            baseline = lightgcn.LightGCN(device, num_users, num_items)
             baseline.load_state_dict(torch.load(path))
             baseline = baseline.to(device)
             user_embed = baseline.embedding_user.weight
             item_embed = baseline.embedding_item.weight
         if args.baseline == 'LR-GCCF':
             print('loading baseline Model LR-GCCF...')
-            path = local_path + '/models/gccf_baseline.ckpt'
-            baseline = lightgcn.LightGCN(device, is_light_gcn=False)
+            path = local_path + '/models/{}/gccf_baseline.ckpt'.format(args.dataset)
+            baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False)
             baseline.load_state_dict(torch.load(path))
             baseline = baseline.to(device)
             user_embed = baseline.embedding_user.weight
@@ -105,30 +104,30 @@ def build_score(device, adj_u_i, args, num_users, num_items):
         torch.save(score, score_path)
 
 
-def score_builder(device):
-    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
+def score_builder(device, args):
+    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores_filtered.pt'.format(args.dataset)
     if not os.path.exists(score_filtered_path):
-        adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
-        score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores.pt'
+        adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
+        score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores.pt'.format(args.dataset)
         adj_insert = torch.load(adj_insert_path, map_location='cpu').to(device)
         scores = torch.load(score_path, map_location='cpu').to(device)
         score = adj_insert * scores
         torch.save(score, score_filtered_path)
 
 
-def row_counter(device):
-    row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/row_count.pt'
+def row_counter(device, args):
+    row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/row_count.pt'.format(args.dataset)
     if not os.path.exists(row_count_path):
-        adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/adj_insert.pt'
+        adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
         adj_insert = torch.load(adj_insert_path, map_location='cpu').to(device)
         row_count = adj_insert.sum(1)
         torch.save(row_count, row_count_path)
 
 
 def build_two_hop_adj(device, args, num_users):
-    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/ori_adj.pt'
-    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/scores_filtered.pt'
-    row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/row_count.pt'
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
+    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores_filtered.pt'.format(args.dataset)
+    row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/row_count.pt'.format(args.dataset)
     score = torch.load(score_filtered_path, map_location='cpu').to(device)
     row_num = torch.load(row_count_path, map_location='cpu').to(device)
 
