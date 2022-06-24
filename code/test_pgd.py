@@ -104,7 +104,7 @@ if device != 'cpu':
     torch.cuda.empty_cache()
 gc.collect()
 adj = None
-if not args.prepare_adj_data:
+if args.prepare_adj_data:
     print("Constructing Adj_insert tensor...")
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_2_hops.pt'.format(args.dataset)
     ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
