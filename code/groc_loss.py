@@ -102,6 +102,7 @@ class GROC_loss(nn.Module):
 
     def get_modified_adj_with_insert_and_remove_by_gradient(self, remove_prob, insert_prob, batch_users_unique,
                                                             edge_gradient, adj_with_insert):
+        tik = time.time()
         i = torch.stack((batch_users_unique, batch_users_unique))
         v = torch.ones(i.shape[1]).to(self.device)
         batch_nodes_in_matrix = torch.sparse_coo_tensor(i, v, self.ori_adj.shape).to(self.device)
@@ -112,8 +113,10 @@ class GROC_loss(nn.Module):
         # TODO: check why normalize gradient? Useless?
         # edge_gradient_remove_norm = torch.sparse.mm(self.d_mtr, edge_gradient)
         # edge_gradient_remove_norm = torch.sparse.mm(edge_gradient_remove_norm, self.d_mtr).to_dense().to(self.device)
-
+        tok = time.time()
+        print('time consumption of k_remove/ k_insert: ', tok - tik)
         # filter added weighted edges, use element-wise multiplication (.mul() for sparse tensor)
+        tik = time.time()
         edge_gradient_rm = edge_gradient.mul(self.ori_adj)
         # only remove edges that are related to the current batch
         edge_gradient_matrix = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient_rm)
@@ -124,7 +127,10 @@ class GROC_loss(nn.Module):
         # mask generation
         mask_rm = torch.ones(ori_adj_ind.shape[1]).bool().to(self.device)
         mask_rm[ind_rm] = False
+        tok = time.time()
+        print('time consumption of remove indices: ', tok - tik)
 
+        tik = time.time()
         edge_gradient_ir = edge_gradient.mul(adj_with_insert - self.ori_adj)
 
         _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
@@ -132,14 +138,22 @@ class GROC_loss(nn.Module):
         ind_rm_ir = edge_gradient_ir.coalesce().indices()[:, indices_ir]
         ind_rm_ir = torch.cat((self.ori_adj.coalesce().indices()[:, mask_rm], ind_rm_ir), -1)
         val_rm_ir = torch.ones(ind_rm_ir.shape[1]).to(self.device)
+        tok = time.time()
+        print('time consumption of insert indices: ', tok - tik)
 
+        tik = time.time()
         adj_insert_remove = torch.sparse_coo_tensor(ind_rm_ir, val_rm_ir, self.ori_adj.shape).to(self.device)
+        tok = time.time()
+        print('time consumption of adj_insert_remove construction: ', tok - tik)
 
+        tik = time.time()
         del edge_gradient, ori_adj_ind, edge_gradient_matrix, edge_gradient_ir, edge_gradient_rm, edge_gradient_batch
         del mask_rm, indices_ir, ind_rm, ind_rm_ir, val_rm_ir
         if self.device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
+        tok = time.time()
+        print('time consumption of garbage collection: ', tok - tik)
 
         return adj_insert_remove
 
@@ -855,27 +869,21 @@ class GROC_loss(nn.Module):
 
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
 
-        print("Current Time before get insert adj: ", datetime.now().strftime("%H:%M:%S"))
         adj_with_insert = self.get_modified_adj_for_insert(batch_users_unique,
                                                            self.adj_with_2_hops)  # 2 views are same
-        print("Current Time after get insert adj: ", datetime.now().strftime("%H:%M:%S"))
 
         # Normalize perturbed adj (with insertion)
         adj_for_loss_gradient = utils.normalize_adj_tensor(adj_with_insert, self.d_mtr, sparse=True)
         adj_for_loss_gradient.requires_grad = True
-        print("Current Time before GCL loss computation: ", datetime.now().strftime("%H:%M:%S"))
         loss_for_grad = ori_gcl_computing(self.ori_adj, self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
                                           self.args.mask_prob_2, query_groc=True)
-        print("Current Time after GCL loss computation: ", datetime.now().strftime("%H:%M:%S"))
 
         edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
-        print("Current Time after edge gradient computation: ", datetime.now().strftime("%H:%M:%S"))
 
         del adj_for_loss_gradient
         gc.collect()
-        print("Current Time before modified adj 1 and 2 computation: ", datetime.now().strftime("%H:%M:%S"))
         adj_insert_remove_1 = self.get_modified_adj_with_insert_and_remove_by_gradient(self.args.insert_prob_1,
                                                                                        self.args.remove_prob_1,
                                                                                        batch_users_unique,
@@ -887,7 +895,6 @@ class GROC_loss(nn.Module):
                                                                                        batch_users_unique,
                                                                                        edge_gradient,
                                                                                        adj_with_insert)
-        print("Current Time after modified adj 1 and 2 computation: ", datetime.now().strftime("%H:%M:%S"))
 
         del adj_with_insert
 
@@ -896,19 +903,19 @@ class GROC_loss(nn.Module):
 
         del adj_insert_remove_1
         del adj_insert_remove_2
-        print("Current Time before final gcl: ", datetime.now().strftime("%H:%M:%S"))
+
         gc.collect()
         groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
                                       mask_2=self.args.mask_prob_2)
-        print("Current Time after final gcl: ", datetime.now().strftime("%H:%M:%S"))
+
         del adj_norm_1
         del adj_norm_2
-        print("Current Time before BPR: ", datetime.now().strftime("%H:%M:%S"))
+
         bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
         reg_loss = reg_loss * self.ori_model.weight_decay
         loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
-        print("Current Time after BPR: ", datetime.now().strftime("%H:%M:%S"))
+
         return loss, bpr_loss, groc_loss
 
     def fit(self):
