@@ -26,6 +26,33 @@ def save_model(model, file_name):
     return
 
 
+def load_baseline(args, model, local_path, device, num_users, num_items):
+    user_embed, item_embed = None, None
+    score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_scores.pt'.format(args.dataset, model)
+    if not os.path.exists(score_path):
+        print('loading baseline Model {}}...'.format(model))
+        if model == 'NGCF':
+            path = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
+            baseline = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+        elif model == 'GCMC':
+            path = local_path + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
+            baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+        elif model == 'GCCF':
+            path = local_path + '/models/{}/GCCF_baseline.ckpt'.format(args.dataset)
+            baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
+        elif model == 'LightGCN':
+            path = local_path + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
+            baseline = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
+        else:
+            raise Exception("Baseline Model Name Wrong.")
+        baseline.load_state_dict(torch.load(path))
+        baseline = baseline.to(device)
+        user_embed = baseline.embedding_dict["user_emb"].data
+        item_embed = baseline.embedding_dict["item_emb"].data
+
+    return user_embed, item_embed, score_path
+
+
 def build_score(device, adj_u_i, args, num_users, num_items):
     # make adj_u_i a tensor
     # calculate 3 dense hop neighbors
@@ -34,7 +61,6 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}'.format(args.dataset)):
         os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}'.format(args.dataset))
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
-    score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores.pt'.format(args.dataset)
     if not os.path.exists(adj_path):
         print("Starting calculate 3 hops neighbours...")
         adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
@@ -62,55 +88,39 @@ def build_score(device, adj_u_i, args, num_users, num_items):
 
         torch.save(adj_insert, adj_path)
 
-    if not os.path.exists(score_path):
-        # import calibrated GNN model and utilize its embeddings for topK
-        local_path = os.path.abspath(os.path.dirname(os.getcwd()))
-        user_embed, item_embed = None, None
-        if args.model_ngcf:
-            print('loading baseline Model NGCF...')
-            path = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
-            baseline = ngcf_ori.NGCF(device, num_users, num_items)
-            baseline.load_state_dict(torch.load(path))
-            baseline = baseline.to(device)
-            user_embed = baseline.embedding_dict["user_emb"].data
-            item_embed = baseline.embedding_dict["item_emb"].data
-        if args.model_gcmc:
-            print('loading baseline Model GCMC...')
-            path = local_path + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
-            baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True)
-            baseline.load_state_dict(torch.load(path))
-            baseline = baseline.to(device)
-            user_embed = baseline.embedding_dict["user_emb"].data
-            item_embed = baseline.embedding_dict["item_emb"].data
-        if args.model_lightgcn:
-            print('loading baseline Model lightGCN...')
-            path = local_path + '/models/{}/lightGCN_baseline.ckpt'.format(args.dataset)
-            baseline = lightgcn.LightGCN(device, num_users, num_items)
-            baseline.load_state_dict(torch.load(path))
-            baseline = baseline.to(device)
-            user_embed = baseline.embedding_user.weight
-            item_embed = baseline.embedding_item.weight
-        if args.model_gccf:
-            print('loading baseline Model LR-GCCF...')
-            path = local_path + '/models/{}/gccf_baseline.ckpt'.format(args.dataset)
-            baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False)
-            baseline.load_state_dict(torch.load(path))
-            baseline = baseline.to(device)
-            user_embed = baseline.embedding_user.weight
-            item_embed = baseline.embedding_item.weight
+    # import calibrated GNN model and utilize its embeddings for topK
+    local_path = os.path.abspath(os.path.dirname(os.getcwd()))
+    user_embed, item_embed = None, None
+    if args.model_ngcf:
+        model = 'NGCF'
+        user_embed, item_embed, score_path = load_baseline(args, model, local_path, device, num_users, num_items)
+        score = user_embed @ item_embed.T
+        torch.save(score, score_path)
 
-        if user_embed is None or item_embed is None:
-            raise Exception('check BaseLine loading! No Embedding loaded.')
+    if args.model_gcmc:
+        model = 'GCMC'
+        user_embed, item_embed, score_path = load_baseline(args, model, local_path, device, num_users, num_items)
+        score = user_embed @ item_embed.T
+        torch.save(score, score_path)
 
+    if args.model_lightgcn:
+        model = 'LightGCN'
+        user_embed, item_embed, score_path = load_baseline(args, model, local_path, device, num_users, num_items)
+        score = user_embed @ item_embed.T
+        torch.save(score, score_path)
+
+    if args.model_gccf:
+        model = 'GCCF'
+        user_embed, item_embed, score_path = load_baseline(args, model, local_path, device, num_users, num_items)
         score = user_embed @ item_embed.T
         torch.save(score, score_path)
 
 
-def score_builder(device, args):
-    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores_filtered.pt'.format(args.dataset)
+def score_builder(device, args, model):
+    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_scores_filtered.pt'.format(args.dataset, model)
     if not os.path.exists(score_filtered_path):
         adj_insert_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
-        score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores.pt'.format(args.dataset)
+        score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_scores.pt'.format(args.dataset, model)
         adj_insert = torch.load(adj_insert_path, map_location='cpu').to(device)
         scores = torch.load(score_path, map_location='cpu').to(device)
         score = adj_insert * scores
@@ -126,9 +136,8 @@ def row_counter(device, args):
         torch.save(row_count, row_count_path)
 
 
-def build_two_hop_adj(device, args, num_users):
-    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
-    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores_filtered.pt'.format(args.dataset)
+def build_two_hop_adj(device, args, num_users, model, adj):
+    score_filtered_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_scores_filtered.pt'.format(args.dataset, model)
     row_count_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/row_count.pt'.format(args.dataset)
     score = torch.load(score_filtered_path, map_location='cpu').to(device)
     row_num = torch.load(row_count_path, map_location='cpu').to(device)
@@ -147,11 +156,40 @@ def build_two_hop_adj(device, args, num_users):
     ind_up_tri = torch.stack((insert_ind[0], insert_ind[1].clone() + num_users))
     ind_down_tri = ind_up_tri.clone()
     ind_down_tri[[1, 0]] = ind_down_tri.clone()
-    adj = torch.load(ori_adj_path, map_location='cpu').to(device)
     ind = torch.cat([ind_up_tri, ind_down_tri, adj.coalesce().indices()], -1).to(device)
     adj_2_hops = torch.sparse_coo_tensor(ind, torch.ones(ind.shape[1]).to(device), adj.shape).to(device)
 
-    return adj_2_hops, adj
+    return adj_2_hops
+
+
+def insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items):
+    print("Constructing Adj_insert tensor for model {}...".format(model))
+    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
+    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
+    if not os.path.exists(adj_path):
+        build_score(device, to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
+                    args, num_users, num_items)
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+
+        score_builder(device, args, model)
+        if device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+
+        row_counter(device, args)
+        if not os.path.exists(ori_adj_path):
+            adj = to_tensor(dataset.getSparseGraph(), device=device)
+            torch.save(adj, ori_adj_path)
+        else:
+            adj = torch.load(ori_adj_path, map_location='cpu').to(device)
+
+        adj_2_hops = build_two_hop_adj(device, args, num_users, model, adj)
+
+        torch.save(adj_2_hops, adj_path)
+    print("Construction finished!")
 
 
 def append_log_to_file(eval_log, epoch, filename):

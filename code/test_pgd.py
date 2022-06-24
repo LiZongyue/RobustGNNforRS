@@ -83,7 +83,6 @@ parser.add_argument('--save_to',                           type=str,   default='
 parser.add_argument('--val_batch_size',                 type=int,   default=2048,                                                                                                                                                help='BS.')
 parser.add_argument('--train_baseline',                 type=bool,   default=False,                                                                                                                                                help='BS.')
 parser.add_argument('--prepare_adj_data',                 type=bool,   default=False,                                                                                                                                                help='BS.')
-parser.add_argument('--baseline',                         type=str,   default='NGCF',                                                                                                                                                help='BS.')
 
 args = parser.parse_args()
 num_users = dataset.n_user
@@ -104,34 +103,6 @@ if device != 'cpu':
     torch.cuda.empty_cache()
 gc.collect()
 adj = None
-if args.prepare_adj_data:
-    print("Constructing Adj_insert tensor...")
-    adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_2_hops.pt'.format(args.dataset)
-    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
-    if os.path.exists(adj_path):
-        adj_2_hops = torch.load(adj_path, map_location='cpu')
-        adj_2_hops = adj_2_hops.to(device)
-        if not os.path.exists(ori_adj_path):
-            adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
-        else:
-            adj = torch.load(ori_adj_path, map_location='cpu').to(device)
-    else:
-        utils.build_score(device, utils.to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
-                            args, num_users, num_items)
-        if device != 'cpu':
-            torch.cuda.empty_cache()
-        gc.collect()
-        utils.score_builder(device, args)
-        utils.row_counter(device, args)
-        if not os.path.exists(ori_adj_path):
-            adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
-            torch.save(adj, ori_adj_path)
-
-        adj_2_hops, adj = utils.build_two_hop_adj(device, args, num_users)
-        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
-            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
-        torch.save(adj_2_hops, adj_path)
-    print("Construction finished!")
 
 if adj is None:
     ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
@@ -172,12 +143,12 @@ if args.train_baseline:
         model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
         model = model.to(device)
         model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
-    if args.model_lightgcn:
+    if args.model_gcmc:
         print("GCMC Baseline Model Calibration.")
         model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
         model = model.to(device)
         model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
-    if args.model_gcmc:
+    if args.model_lightgcn:
         print("LightGCN Baseline Model Calibration.")
         model = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
         model = model.to(device)
@@ -189,51 +160,125 @@ if args.train_baseline:
         model.fit(adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val, args.dataset)
 
 if args.train_groc:
-    Recmodel = None
-    model = None
     if args.model_ngcf:
         print("train model NGCF")
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, train_groc=True)
-        model = args.model_ngcf
+        model = 'NGCF'
+        adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
+                                                                                                     model)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
+        adj_2_hops = torch.load(adj_path).to(device)
+
+        Recmodel = Recmodel.to(device)
+
+        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+
+        print("save model")
+        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
+                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
+
+        print("===========================")
+        print("original model performance on original adjacency matrix:")
+        print("===========================")
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
+        print("===========================")
+
+        print("ori model performance after GROC learning on modified adjacency matrix A:")
+        print("===========================")
+        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
+
     if args.model_lightgcn:
         print("train model LightGCN")
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, train_groc=True)
-        model = args.model_lightgcn
+        model = 'LightGCN'
+        adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
+                                                                                                     model)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
+        adj_2_hops = torch.load(adj_path).to(device)
+        Recmodel = Recmodel.to(device)
+
+        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+
+        print("save model")
+        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
+                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
+
+        print("===========================")
+        print("original model performance on original adjacency matrix:")
+        print("===========================")
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
+        print("===========================")
+
+        print("ori model performance after GROC learning on modified adjacency matrix A:")
+        print("===========================")
+        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
     if args.model_gcmc:
         print("train model GCMC")
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, train_groc=True)
-        model = args.model_gcmc
+        model = 'GCMC'
+        adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
+                                                                                                     model)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
+        adj_2_hops = torch.load(adj_path).to(device)
+        Recmodel = Recmodel.to(device)
+
+        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+
+        print("save model")
+        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
+                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
+
+        print("===========================")
+        print("original model performance on original adjacency matrix:")
+        print("===========================")
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
+        print("===========================")
+
+        print("ori model performance after GROC learning on modified adjacency matrix A:")
+        print("===========================")
+        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
     if args.model_gccf:
         print("train model LR-GCCF")
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, train_groc=True)
-        model = args.model_gccf
-    if Recmodel is None:
-        raise Exception('No model for GROC to train.')
+        model = 'GCCF'
+        adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
+                                                                                                     model)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
+        adj_2_hops = torch.load(adj_path).to(device)
+        Recmodel = Recmodel.to(device)
 
-    Recmodel = Recmodel.to(device)
+        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
-    groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
-    groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+        print("save model")
+        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
+                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
 
-    print("save model")
-    torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
-               '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
+        print("===========================")
+        print("original model performance on original adjacency matrix:")
+        print("===========================")
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
+        print("===========================")
 
-    print("===========================")
-    print("original model performance on original adjacency matrix:")
-    print("===========================")
-    Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
-    print("===========================")
+        print("ori model performance after GROC learning on modified adjacency matrix A:")
+        print("===========================")
+        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
+        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
 
-    print("ori model performance after GROC learning on modified adjacency matrix A:")
-    print("===========================")
-    modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
-                                  args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
-    Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
 
 if args.random_perturb:
     print("train model using random perturbation")
