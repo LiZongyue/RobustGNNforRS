@@ -30,7 +30,7 @@ def load_baseline(args, model, local_path, device, num_users, num_items):
     user_embed, item_embed = None, None
     score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_scores.pt'.format(args.dataset, model)
     if not os.path.exists(score_path):
-        print('loading baseline Model {}}...'.format(model))
+        print('loading baseline Model {}...'.format(model))
         if model == 'NGCF':
             path = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
