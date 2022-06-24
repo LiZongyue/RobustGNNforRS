@@ -847,7 +847,7 @@ class GROC_loss(nn.Module):
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
 
         adj_with_insert, num_insert = self.get_modified_adj_for_insert(batch_users_unique,
-                                                           self.adj_with_2_hops)  # 2 views are same
+                                                                       self.adj_with_2_hops)  # 2 views are same
 
         # Normalize perturbed adj (with insertion)
         adj_for_loss_gradient = utils.normalize_adj_tensor(adj_with_insert, self.d_mtr, sparse=True)
@@ -877,7 +877,11 @@ class GROC_loss(nn.Module):
         groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
                                       mask_2=self.args.mask_prob_2)
+        del adj_norm_1, adj_norm_2, adj_insert_remove_1, adj_insert_remove_2, edge_gradient, loss_for_grad, adj_with_insert, adj_for_loss_gradient
 
+        if self.device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
         bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
         reg_loss = reg_loss * self.ori_model.weight_decay
         loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
