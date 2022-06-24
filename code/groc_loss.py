@@ -851,28 +851,31 @@ class GROC_loss(nn.Module):
 
     def forward_pass_groc_with_bpr(self, batch_users, batch_pos, batch_neg, ori_adj_sparse):
         batch_users_unique = batch_users.unique()  # only select 10 anchor nodes for adj_edge insertion
+        print('Num of anchor node for one batch:', len(batch_users_unique))
 
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
+
+        print("Current Time before get insert adj: ", datetime.now().strftime("%H:%M:%S"))
         adj_with_insert = self.get_modified_adj_for_insert(batch_users_unique,
                                                            self.adj_with_2_hops)  # 2 views are same
-
-        # batch_users_groc = batch_all_node[batch_all_node < self.num_users]
-        # batch_items = batch_all_node[batch_all_node >= self.num_users] - self.num_users
+        print("Current Time after get insert adj: ", datetime.now().strftime("%H:%M:%S"))
 
         # Normalize perturbed adj (with insertion)
-
         adj_for_loss_gradient = utils.normalize_adj_tensor(adj_with_insert, self.d_mtr, sparse=True)
         adj_for_loss_gradient.requires_grad = True
+        print("Current Time before GCL loss computation: ", datetime.now().strftime("%H:%M:%S"))
         loss_for_grad = ori_gcl_computing(self.ori_adj, self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
                                           self.args.mask_prob_2, query_groc=True)
+        print("Current Time after GCL loss computation: ", datetime.now().strftime("%H:%M:%S"))
 
         edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
-        self.ori_adj.requires_grad = False
+        print("Current Time after edge gradient computation: ", datetime.now().strftime("%H:%M:%S"))
+
         del adj_for_loss_gradient
         gc.collect()
-
+        print("Current Time before modified adj 1 and 2 computation: ", datetime.now().strftime("%H:%M:%S"))
         adj_insert_remove_1 = self.get_modified_adj_with_insert_and_remove_by_gradient(self.args.insert_prob_1,
                                                                                        self.args.remove_prob_1,
                                                                                        batch_users_unique,
@@ -884,6 +887,7 @@ class GROC_loss(nn.Module):
                                                                                        batch_users_unique,
                                                                                        edge_gradient,
                                                                                        adj_with_insert)
+        print("Current Time after modified adj 1 and 2 computation: ", datetime.now().strftime("%H:%M:%S"))
 
         del adj_with_insert
 
@@ -892,19 +896,19 @@ class GROC_loss(nn.Module):
 
         del adj_insert_remove_1
         del adj_insert_remove_2
-
+        print("Current Time before final gcl: ", datetime.now().strftime("%H:%M:%S"))
         gc.collect()
         groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
                                       mask_2=self.args.mask_prob_2)
-
+        print("Current Time after final gcl: ", datetime.now().strftime("%H:%M:%S"))
         del adj_norm_1
         del adj_norm_2
-
+        print("Current Time before BPR: ", datetime.now().strftime("%H:%M:%S"))
         bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
         reg_loss = reg_loss * self.ori_model.weight_decay
         loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
-
+        print("Current Time after BPR: ", datetime.now().strftime("%H:%M:%S"))
         return loss, bpr_loss, groc_loss
 
     def fit(self):
