@@ -840,7 +840,6 @@ class GROC_loss(nn.Module):
 
     def forward_pass_groc_with_bpr(self, batch_users, batch_pos, batch_neg, ori_adj_sparse):
         batch_users_unique = batch_users.unique()  # only select 10 anchor nodes for adj_edge insertion
-        print('Num of anchor node for one batch:', len(batch_users_unique))
 
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
 
