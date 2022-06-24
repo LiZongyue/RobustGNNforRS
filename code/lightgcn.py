@@ -197,10 +197,10 @@ class LightGCN(nn.Module):
 
     def _train_with_val(self, adj, users, posItems, negItems, users_val, posItems_val, negItems_val, dataset):
         local_path = os.path.abspath(os.path.dirname(os.getcwd()))
-        if not os.path.exists(local_path + '/models'):
-            os.mkdir(local_path + '/models')
-        if not os.path.exists(local_path + '/log'):
-            os.mkdir(local_path + '/log')
+        if not os.path.exists(local_path + '/models/{}'.format(dataset)):
+            os.mkdir(local_path + '/models/{}'.format(dataset))
+        if not os.path.exists(local_path + '/log/{}'.format(dataset)):
+            os.mkdir(local_path + '/log/{}'.format(dataset))
 
         if self.is_lightgcn:
             checkpoint_file_name = '{}/models/{}/LightGCN_baseline.ckpt'.format(local_path, dataset)

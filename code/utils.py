@@ -31,6 +31,8 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     # calculate 3 dense hop neighbors
     if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
         os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
+    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}'.format(args.dataset)):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}'.format(args.dataset))
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
     score_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/scores.pt'.format(args.dataset)
     if not os.path.exists(adj_path):
