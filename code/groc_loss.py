@@ -114,8 +114,7 @@ class GROC_loss(nn.Module):
         # filter added weighted edges, use element-wise multiplication (.mul() for sparse tensor)
         start = time.time()
         edge_gradient_matrix = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient).mul(self.ori_adj)
-        tok = time.time()
-        print('time consumption of * and @ OPs: ', tok - start)
+
         # only remove edges that are related to the current batch
         # according to gradient value, find out edges indices that have min. gradients
         edge_gradient_batch = edge_gradient_matrix.coalesce().values()
@@ -129,7 +128,8 @@ class GROC_loss(nn.Module):
 
         start = time.time()
         edge_gradient_ir = (adj_with_insert - self.ori_adj).mul(edge_gradient)
-
+        tok = time.time()
+        print('time consumption of * OP: ', tok - start)
         _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
 
         ind_rm_ir = edge_gradient_ir.coalesce().indices()[:, indices_ir]
