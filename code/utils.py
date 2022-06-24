@@ -34,21 +34,33 @@ def load_baseline(args, model, local_path, device, num_users, num_items):
         if model == 'NGCF':
             path = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_dict["user_emb"].data
+            item_embed = baseline.embedding_dict["item_emb"].data
         elif model == 'GCMC':
             path = local_path + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
             baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_dict["user_emb"].data
+            item_embed = baseline.embedding_dict["item_emb"].data
         elif model == 'GCCF':
             path = local_path + '/models/{}/GCCF_baseline.ckpt'.format(args.dataset)
             baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_user.data
+            item_embed = baseline.embedding_item.data
         elif model == 'LightGCN':
             path = local_path + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
             baseline = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
+            baseline.load_state_dict(torch.load(path))
+            baseline = baseline.to(device)
+            user_embed = baseline.embedding_user.data
+            item_embed = baseline.embedding_item.data
         else:
             raise Exception("Baseline Model Name Wrong.")
-        baseline.load_state_dict(torch.load(path))
-        baseline = baseline.to(device)
-        user_embed = baseline.embedding_dict["user_emb"].data
-        item_embed = baseline.embedding_dict["item_emb"].data
 
     return user_embed, item_embed, score_path
 
