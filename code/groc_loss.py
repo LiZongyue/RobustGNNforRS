@@ -862,13 +862,13 @@ class GROC_loss(nn.Module):
         # Normalize perturbed adj (with insertion)
 
         adj_for_loss_gradient = utils.normalize_adj_tensor(adj_with_insert, self.d_mtr, sparse=True)
-        self.ori_adj.requires_grad = True
+        adj_for_loss_gradient.requires_grad = True
         loss_for_grad = ori_gcl_computing(self.ori_adj, self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
                                           self.args.mask_prob_2, query_groc=True)
 
-        edge_gradient = torch.autograd.grad(loss_for_grad, self.ori_adj, retain_graph=True)[0]
+        edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
         self.ori_adj.requires_grad = False
         del adj_for_loss_gradient
         gc.collect()
