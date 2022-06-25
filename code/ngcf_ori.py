@@ -8,7 +8,7 @@ import utils
 
 
 class NGCF(nn.Module):
-    def __init__(self, device, n_user, n_item, is_gcmc=False, sparse=True, use_dcl=True, train_groc=False):
+    def __init__(self, device, n_user, n_item, is_gcmc=False, sparse=True, use_dcl=True):
         super(NGCF, self).__init__()
         self.device = device
         self.lr = 0.001
@@ -26,9 +26,6 @@ class NGCF(nn.Module):
 
         self.tau_plus = 1e-3
         self.T = 0.07
-        self.train_groc = train_groc
-        if train_groc:
-            self.adj = nn.Parameter(torch.sparse_coo_tensor(size=(self.adj_shape, self.adj_shape)))
 
         """
         *********************************************************
@@ -162,11 +159,8 @@ class NGCF(nn.Module):
         """
         query from GROC means that we want to push adj into computational graph
         """
-        if self.train_groc:
-            self.adj = nn.Parameter(adj)
-            all_users, all_items = self.computer(self.adj)
-        else:
-            all_users, all_items = self.computer(adj)
+
+        all_users, all_items = self.computer(adj)
 
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
