@@ -100,13 +100,15 @@ class NGCF(nn.Module):
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
 
-    def computer(self, adj):
+    def computer(self, adj, adj_drop_out=True):
         # TODO: override lightGCN here
         """
         propagate methods for lightGCN
         """
-
-        g_droped = self.sparse_dropout(adj, 0.2, adj._nnz())
+        if adj_drop_out:
+            g_droped = self.sparse_dropout(adj, 0.2, adj._nnz())
+        else:
+            g_droped = adj
 
         all_emb = torch.cat([self.embedding_dict['user_emb'], self.embedding_dict['item_emb']], 0)
         all_embedding = [all_emb]
@@ -155,12 +157,12 @@ class NGCF(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, query_groc=False):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, query_groc=False, adj_drop_out=True):
         """
         query from GROC means that we want to push adj into computational graph
         """
 
-        all_users, all_items = self.computer(adj)
+        all_users, all_items = self.computer(adj, adj_drop_out)
 
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
@@ -183,22 +185,8 @@ class NGCF(nn.Module):
         # negative_mask=torch.cat((negative_mask,negative_mask),0)
         return negative_mask
 
-    def bpr_loss(self, adj, users, poss, negative):
-        '''
-        (users_emb, pos_emb, neg_emb,
-         userEmb0, posEmb0, negEmb0) = self.getEmbedding(adj, users.long(), pos.long(), neg.long())
-        reg_loss = (1 / 2) * (userEmb0.norm(2).pow(2) +
-                              posEmb0.norm(2).pow(2) +
-                              negEmb0.norm(2).pow(2)) / float(len(users))
-        pos_scores = torch.mul(users_emb, pos_emb)
-        pos_scores = torch.sum(pos_scores, dim=1)
-        neg_scores = torch.mul(users_emb, neg_emb)
-        neg_scores = torch.sum(neg_scores, dim=1)
-
-        loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
-        '''
-
-        (users_emb, pos_emb, userEmb0, posEmb0, neg_emb) = self.getEmbedding(adj, users.long(), poss.long(), negative.long())
+    def bpr_loss(self, adj, users, poss, negative, adj_drop_out=True):
+        (users_emb, pos_emb, userEmb0, posEmb0, neg_emb) = self.getEmbedding(adj, users.long(), poss.long(), negative.long(), adj_drop_out)
         # pos_emb_old=pos_emb
         if self.use_dcl:
             users_emb = nn.functional.normalize(users_emb, dim=1)

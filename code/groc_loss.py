@@ -103,7 +103,7 @@ class GROC_loss(nn.Module):
         v = torch.ones(i.shape[1]).to(self.device)
         batch_nodes_in_matrix = torch.sparse_coo_tensor(i, v, self.ori_adj.shape).to(self.device)
 
-        ori_adj_ind = self.ori_adj.coalesce().indices()
+        ori_adj_ind = self.ori_adj._indices()
         k_remove = int(remove_prob * torch.sparse.sum(torch.sparse.mm(batch_nodes_in_matrix, self.ori_adj)))
         # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
         k_insert = int(insert_prob * num_insert)
@@ -114,7 +114,7 @@ class GROC_loss(nn.Module):
 
         # only remove edges that are related to the current batch
         # according to gradient value, find out edges indices that have min. gradients
-        edge_gradient_batch = edge_gradient_matrix.coalesce().values()
+        edge_gradient_batch = edge_gradient_matrix.values()
         _, ind_rm = torch.topk(edge_gradient_batch, k_remove, largest=False)
 
         # mask generation
@@ -122,10 +122,10 @@ class GROC_loss(nn.Module):
         mask_rm[ind_rm] = False
 
         edge_gradient_ir = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient).mul(adj_with_insert - self.ori_adj)
-        _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
+        _, indices_ir = torch.topk(edge_gradient_ir._values(), k_insert)
 
-        ind_rm_ir = edge_gradient_ir.coalesce().indices()[:, indices_ir]
-        ind_rm_ir = torch.cat((self.ori_adj.coalesce().indices()[:, mask_rm], ind_rm_ir), -1)
+        ind_rm_ir = edge_gradient_ir._indices()[:, indices_ir]
+        ind_rm_ir = torch.cat((self.ori_adj._indices()[:, mask_rm], ind_rm_ir), -1)
         val_rm_ir = torch.ones(ind_rm_ir.shape[1]).to(self.device)
 
         adj_insert_remove = torch.sparse_coo_tensor(ind_rm_ir, val_rm_ir, self.ori_adj.shape).to(self.device)
@@ -850,10 +850,12 @@ class GROC_loss(nn.Module):
         # Normalize perturbed adj (with insertion)
         adj_for_loss_gradient = utils.normalize_adj_tensor(adj_with_insert, self.d_mtr, sparse=True)
         adj_for_loss_gradient.requires_grad = True
+        # self.ori_adj.requires_grad=True
+        model_name = self.ori_model.__class__.__name__
         loss_for_grad = ori_gcl_computing(self.ori_adj, self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
-                                          self.args.mask_prob_2, query_groc=True)
+                                          self.args.mask_prob_2, query_groc=True, model_name=model_name)
 
         edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
 
@@ -884,15 +886,17 @@ class GROC_loss(nn.Module):
             self.ori_model.requires_grad_(False)
         groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
-                                      mask_2=self.args.mask_prob_2)
+                                      mask_2=self.args.mask_prob_2, model_name=model_name)
 
         del adj_norm_1
         del adj_norm_2
         if self.device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
-
-        bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
+        if model_name in ['NGCF', 'GCMC']:
+            bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg, adj_drop_out=True)
+        else:
+            bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
         reg_loss = reg_loss * self.ori_model.weight_decay
         loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
 

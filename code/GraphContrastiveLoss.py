@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 def ori_gcl_computing(ori_adj, trn_model, gra1, gra2, users, poss, args, device, flag=False, mask_1=None, mask_2=None,
-                      query_groc=None):
+                      query_groc=None, model_name=None):
     """
     mask_1: prob of mask_1
     """
@@ -12,21 +12,30 @@ def ori_gcl_computing(ori_adj, trn_model, gra1, gra2, users, poss, args, device,
     (_, pos_emb, _, _) = trn_model.getEmbedding(ori_adj, users.long(), poss.long(), query_groc=query_groc)
 
     if flag:
-        (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc)
+        if model_name in ['NGCF', 'GCMC']:
+            (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)
+        else:
+            (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc)
         mask_1 = (torch.FloatTensor(users_emb_perturb.shape[1]).uniform_() < mask_1).to(trn_model.device)
         mask_2 = (torch.FloatTensor(users_emb_perturb.shape[1]).uniform_() < mask_2).to(trn_model.device)
         # if mask_1 is not None and mask_2 is not None:
         users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb, dim=1).masked_fill_(mask_1, 0.)
         users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb, dim=1).masked_fill_(mask_2, 0.)
     else:
-        (users_emb_perturb_1, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc)
-
+        if model_name in ['NGCF', 'GCMC']:
+            (users_emb_perturb_1, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)
+        else:
+            (users_emb_perturb_1, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc)
         if mask_1 is not None:
             mask_1 = (torch.FloatTensor(users_emb_perturb_1.shape[1]).uniform_() < mask_1).to(trn_model.device)
             users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1).masked_fill_(mask_1, 0.)
         else:
             users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1)
-        (users_emb_perturb_2, _, _, _) = trn_model.getEmbedding(gra2, users.long(), poss.long(), query_groc=query_groc)
+        if model_name in ['NGCF', 'GCMC']:
+            (users_emb_perturb_2, _, _, _) = trn_model.getEmbedding(gra2, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)
+        else:
+            (users_emb_perturb_2, _, _, _) = trn_model.getEmbedding(gra2, users.long(), poss.long(), query_groc=query_groc)
+
         if mask_2 is not None:
             mask_2 = (torch.FloatTensor(users_emb_perturb_2.shape[1]).uniform_() < mask_2).to(trn_model.device)
             users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2, dim=1).masked_fill_(mask_2, 0.)
