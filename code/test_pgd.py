@@ -189,61 +189,62 @@ if args.train_groc:
     if args.model_lightgcn:
         print("train model LightGCN")
         print("=================================================")
-        Recmodel = lightgcn.LightGCN(device, num_users, num_items, train_groc=True)
+        Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
         model = 'LightGCN'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
         adj_2_hops = torch.load(adj_path).to(device)
         Recmodel = Recmodel.to(device)
-
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
+        if not os.path.exists(
+                os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset))
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs'):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs')
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
-        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+        model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
 
-        print("save model")
-        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
-                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
+        log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                   '/models/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val,
+                                        model_path, log_path)
 
         print("===========================")
-        print("original model performance on original adjacency matrix:")
-        print("===========================")
-        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
-        print("===========================")
+        print("GROC training finished!")
 
-        print("ori model performance after GROC learning on modified adjacency matrix A:")
-        print("===========================")
-        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
-                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
-        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
     if args.model_gcmc:
         print("train model GCMC")
         print("=================================================")
-        Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, train_groc=True)
+        Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
         model = 'GCMC'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
         adj_2_hops = torch.load(adj_path).to(device)
         Recmodel = Recmodel.to(device)
-
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
-        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset))
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs'):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs')
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
+        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
+        log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                     '/models/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
 
-        print("save model")
-        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
-                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
-
         print("===========================")
-        print("original model performance on original adjacency matrix:")
-        print("===========================")
-        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
-        print("===========================")
-
-        print("ori model performance after GROC learning on modified adjacency matrix A:")
-        print("===========================")
-        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
-                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
-        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
+        print("GROC training finished!")
     if args.model_gccf:
         print("train model LR-GCCF")
         print("=================================================")
