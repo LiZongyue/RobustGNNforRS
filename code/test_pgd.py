@@ -102,14 +102,12 @@ if device != 'cpu':
     torch.cuda.manual_seed(args.seed)
     torch.cuda.empty_cache()
 gc.collect()
-adj = None
 
-if adj is None:
-    ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
-    if not os.path.exists(ori_adj_path):
-        adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
-    else:
-        adj = torch.load(ori_adj_path, map_location='cpu').to(device)
+ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
+if not os.path.exists(ori_adj_path):
+    adj = utils.to_tensor(dataset.getSparseGraph(), device=device)
+else:
+    adj = torch.load(ori_adj_path, map_location='cpu').to(device)
 # adj matrix only contains users and items
 perturbations = int(args.ptb_rate * (net.sum() // args.perturb_strength_list[args.modified_adj_id]))
 

@@ -837,11 +837,12 @@ class GROC_loss(nn.Module):
         return loss, bpr_loss, groc_loss
 
     def groc_val_with_bpr_one_batch(self, batch_users, batch_pos, batch_neg, ori_adj_sparse):
-        loss, bpr_loss, groc_loss = self.forward_pass_groc_with_bpr(batch_users, batch_pos, batch_neg, ori_adj_sparse)
+        loss, bpr_loss, groc_loss = self.forward_pass_groc_with_bpr(batch_users, batch_pos, batch_neg, ori_adj_sparse, True)
 
         return loss, bpr_loss, groc_loss
 
-    def forward_pass_groc_with_bpr(self, batch_users, batch_pos, batch_neg, ori_adj_sparse):
+    def forward_pass_groc_with_bpr(self, batch_users, batch_pos, batch_neg, ori_adj_sparse, val=False):
+        self.ori_model.requires_grad_(True)
         batch_users_unique = batch_users.unique()  # only select 10 anchor nodes for adj_edge insertion
 
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
@@ -859,6 +860,9 @@ class GROC_loss(nn.Module):
 
         edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
 
+        del adj_for_loss_gradient, loss_for_grad
+        gc.collect()
+
         adj_insert_remove_1 = self.get_modified_adj_with_insert_and_remove_by_gradient(self.args.insert_prob_1,
                                                                                        self.args.remove_prob_1,
                                                                                        batch_users_unique,
@@ -870,18 +874,27 @@ class GROC_loss(nn.Module):
                                                                                        batch_users_unique,
                                                                                        edge_gradient,
                                                                                        adj_with_insert, num_insert)
+        del adj_with_insert, edge_gradient
 
         adj_norm_1 = utils.normalize_adj_tensor(adj_insert_remove_1, self.d_mtr, sparse=True)
         adj_norm_2 = utils.normalize_adj_tensor(adj_insert_remove_2, self.d_mtr, sparse=True)
 
+        del adj_insert_remove_1
+        del adj_insert_remove_2
+
+        gc.collect()
+        if val:
+            self.ori_model.requires_grad_(False)
         groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
                                       mask_2=self.args.mask_prob_2)
-        del adj_norm_1, adj_norm_2, adj_insert_remove_1, adj_insert_remove_2, edge_gradient, loss_for_grad, adj_with_insert, adj_for_loss_gradient
 
+        del adj_norm_1
+        del adj_norm_2
         if self.device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
+
         bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
         reg_loss = reg_loss * self.ori_model.weight_decay
         loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
