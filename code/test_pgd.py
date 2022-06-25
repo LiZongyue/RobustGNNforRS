@@ -262,8 +262,8 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset))
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs')
-        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_logs/{}'.format(args.dataset)):
-            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_logs/{}'.format(args.dataset))
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
                      '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
