@@ -256,26 +256,20 @@ if args.train_groc:
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
         adj_2_hops = torch.load(adj_path).to(device)
         Recmodel = Recmodel.to(device)
-
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset))
+        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_logs/{}'.format(args.dataset)):
+            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
-        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+        model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
 
-        print("save model")
-        torch.save(Recmodel.state_dict(), os.path.abspath(os.path.dirname(os.getcwd())) +
-                   '/models/GROC_models/{}/{}_after_GROC_{}.pt'.format(args.dataset, model, args.loss_weight_bpr))
+        log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                     '/models/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
 
         print("===========================")
-        print("original model performance on original adjacency matrix:")
-        print("===========================")
-        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(adj), None, 0)
-        print("===========================")
-
-        print("ori model performance after GROC learning on modified adjacency matrix A:")
-        print("===========================")
-        modified_adj_a = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
-                                      args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device)
-        Procedure.Test(dataset, Recmodel, 100, utils.normalize_adj_tensor(modified_adj_a), None, 0)
-
+        print("GROC training finished!")
 
 if args.random_perturb:
     print("train model using random perturbation")

@@ -682,10 +682,7 @@ class GROC_loss(nn.Module):
 
         return optimizer
 
-    def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val):
-        checkpoint_file_name = 'Robustness-1/models/{model_file}.ckpt'.format(model_file=self.args.save_to)
-        log_file_name = 'Robustness-1/log/{model_file}.log'.format(model_file=self.args.save_to)
-
+    def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val, checkpoint_file_name, log_file_name):
         self.ori_model.train()
         embedding_param = []
         adj_param = []
