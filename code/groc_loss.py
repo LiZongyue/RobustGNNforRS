@@ -103,7 +103,7 @@ class GROC_loss(nn.Module):
         v = torch.ones(i.shape[1]).to(self.device)
         batch_nodes_in_matrix = torch.sparse_coo_tensor(i, v, self.ori_adj.shape).to(self.device)
 
-        ori_adj_ind = self.ori_adj._indices()
+        ori_adj_ind = self.ori_adj.coalesce().indices()
         k_remove = int(remove_prob * torch.sparse.sum(torch.sparse.mm(batch_nodes_in_matrix, self.ori_adj)))
         # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
         k_insert = int(insert_prob * num_insert)
@@ -122,10 +122,10 @@ class GROC_loss(nn.Module):
         mask_rm[ind_rm] = False
 
         edge_gradient_ir = torch.sparse.mm(batch_nodes_in_matrix, edge_gradient).mul(adj_with_insert - self.ori_adj)
-        _, indices_ir = torch.topk(edge_gradient_ir._values(), k_insert)
+        _, indices_ir = torch.topk(edge_gradient_ir.coalesce().values(), k_insert)
 
-        ind_rm_ir = edge_gradient_ir._indices()[:, indices_ir]
-        ind_rm_ir = torch.cat((self.ori_adj._indices()[:, mask_rm], ind_rm_ir), -1)
+        ind_rm_ir = edge_gradient_ir.coalesce().indices()[:, indices_ir]
+        ind_rm_ir = torch.cat((self.ori_adj.coalesce().indices()[:, mask_rm], ind_rm_ir), -1)
         val_rm_ir = torch.ones(ind_rm_ir.shape[1]).to(self.device)
 
         adj_insert_remove = torch.sparse_coo_tensor(ind_rm_ir, val_rm_ir, self.ori_adj.shape).to(self.device)

@@ -207,10 +207,10 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/models/GROC_models/{}/{}_after_GROC_{}_.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
 
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                   '/log/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+                   '/log/GROC_logs/{}/{}_after_GROC_{}_.log'.format(args.dataset, model, args.loss_weight_bpr)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val,
                                         model_path, log_path)
 

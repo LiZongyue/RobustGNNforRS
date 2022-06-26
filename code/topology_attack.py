@@ -25,9 +25,6 @@ class PGDAttack(BaseAttack):
             self.adj_changes = Parameter(torch.FloatTensor(int(nnodes * (nnodes - 1) / 2)))
             self.adj_changes.data.fill_(0)
 
-        if attack_features:
-            assert True, "Topology Attack does not support attack feature"
-
         self.complementary = None
 
     def attack(self, ori_adj, perturbations, users, posItems, negItems, num_users, path, ids, flag):
