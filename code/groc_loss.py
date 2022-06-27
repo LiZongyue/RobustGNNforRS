@@ -678,7 +678,7 @@ class GROC_loss(nn.Module):
         optimizer = optim.Adam([
             {'params': embedding_param},
             {'params': adj_param, 'lr': 0}
-        ], lr=self.ori_model.lr, weight_decay=self.ori_model.weight_decay)
+        ], lr=self.args.lr, weight_decay=self.ori_model.weight_decay)
 
         return optimizer
 
