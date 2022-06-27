@@ -697,7 +697,7 @@ class GROC_loss(nn.Module):
         total_batch = len(users) // self.args.batch_size + 1
         total_val_batch = len(users_val) // self.args.val_batch_size + 1
         ori_adj_sparse = utils.normalize_adj_tensor(self.ori_adj, self.d_mtr, sparse=True).to(self.device)  # for bpr loss
-
+        val_max_loss, val_max_bpr_loss, val_max_groc_loss = float('Inf'), float('Inf'), float('Inf')
         for i in range(self.args.groc_epochs):
             eval_log = []
             optimizer.zero_grad()
@@ -708,13 +708,16 @@ class GROC_loss(nn.Module):
 
             aver_loss, aver_bpr_loss, aver_groc_loss = 0., 0., 0.
             val_aver_loss, val_aver_bpr_loss, val_aver_groc_loss = 0., 0., 0.
-            val_max_loss, val_max_bpr_loss, val_max_groc_loss = float('Inf'), float('Inf'), float('Inf')
+
 
             for (batch_i, (batch_users, batch_pos, batch_neg)) \
                     in enumerate(utils.minibatch(users, posItems, negItems, batch_size=self.args.batch_size)):
-                loss, bpr_loss, groc_loss = \
-                    self.groc_train_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler)
-
+                if self.args.with_bpr:
+                    loss, bpr_loss, groc_loss = \
+                        self.groc_train_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler)
+                else:
+                    loss, bpr_loss, groc_loss = \
+                        self.groc_train_without_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler)
                 aver_loss += loss.cpu().item()
                 aver_bpr_loss += bpr_loss.cpu().item()
                 aver_groc_loss += groc_loss.cpu().item()
@@ -777,9 +780,9 @@ class GROC_loss(nn.Module):
                 current_time = now.strftime("%H:%M:%S")
                 eval_log.append("Current Time = {}".format(current_time))
                 eval_log.append("=======================")
-                eval_log.append("Valid GROC Loss: {}".format(val_aver_loss))
+                eval_log.append("Valid total Loss: {}".format(val_aver_loss))
                 eval_log.append("Valid BPR Loss: {}".format(val_aver_bpr_loss))
-                eval_log.append("Valid DCL Loss: {}".format(val_aver_groc_loss))
+                eval_log.append("Valid GROC Loss: {}".format(val_aver_groc_loss))
                 eval_log.append("=========================")
 
                 utils.append_log_to_file(eval_log, i, log_file_name)
@@ -827,6 +830,15 @@ class GROC_loss(nn.Module):
         loss, bpr_loss, groc_loss = self.forward_pass_groc_with_bpr(batch_users, batch_pos, batch_neg, ori_adj_sparse)
 
         loss.backward()
+        optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
+
+        return loss, bpr_loss, groc_loss
+
+    def groc_train_without_bpr_one_batch(self, batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler):
+        loss, bpr_loss, groc_loss = self.forward_pass_groc_with_bpr(batch_users, batch_pos, batch_neg, ori_adj_sparse)
+        groc_loss.backward()
         optimizer.step()
         if scheduler is not None:
             scheduler.step()

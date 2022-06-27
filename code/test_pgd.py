@@ -20,7 +20,7 @@ parser.add_argument('--warmup_steps',                   type=int,   default=1000
 parser.add_argument('--batch_size',                     type=int,   default=2048,                                                                                                                                                help='BS.')
 parser.add_argument('--groc_batch_size',                type=int,   default=10,                                                                                                                                                help='BS.')
 parser.add_argument('--groc_epochs',                    type=int,   default=100,                                                                                                                                                 help='Number of epochs to train.')
-parser.add_argument('--lr',                             type=float, default=0.001,                                                                                                                                                help='Initial learning rate.')
+parser.add_argument('--lr',                             type=float, default=0.0001,                                                                                                                                                help='Initial learning rate.')
 parser.add_argument('--weight_decay',                   type=float, default=5e-4,                                                                                                                                                help='Weight decay (L2 loss on parameters).')
 parser.add_argument('--hidden',                         type=int,   default=16,                                                                                                                                                  help='Number of hidden units.')
 parser.add_argument('--dropout',                        type=float, default=0.5,                                                                                                                                                 help='Dropout rate (1-keep probability).')
@@ -83,6 +83,7 @@ parser.add_argument('--save_to',                           type=str,   default='
 parser.add_argument('--val_batch_size',                 type=int,   default=2048,                                                                                                                                                help='BS.')
 parser.add_argument('--train_baseline',                 type=bool,   default=False,                                                                                                                                                help='BS.')
 parser.add_argument('--prepare_adj_data',                 type=bool,   default=False,                                                                                                                                                help='BS.')
+parser.add_argument('--with_bpr',                 type=bool,   default=True,                                                                                                                                                help='BS.')
 
 args = parser.parse_args()
 num_users = dataset.n_user
@@ -163,6 +164,11 @@ if args.train_groc:
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
         model = 'NGCF'
+        bpr_flag = 'with_BPR'
+        if not args.with_bpr:
+            path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
+            Recmodel.load_state_dict(torch.load(path))
+            bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
@@ -179,9 +185,9 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/models/GROC_models/{}/{}_after_GROC_{}_{}.ckpt'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/log/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/log/GROC_logs/{}/{}_after_GROC_{}_{}.log'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
 
         print("===========================")
@@ -191,6 +197,11 @@ if args.train_groc:
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
         model = 'LightGCN'
+        bpr_flag = 'with_BPR'
+        if not args.with_bpr:
+            path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
+            Recmodel.load_state_dict(torch.load(path))
+            bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
@@ -207,10 +218,10 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_after_GROC_{}_.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/models/GROC_models/{}/{}_after_GROC_{}_{}.ckpt'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
 
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                   '/log/GROC_logs/{}/{}_after_GROC_{}_.log'.format(args.dataset, model, args.loss_weight_bpr)
+                   '/log/GROC_logs/{}/{}_after_GROC_{}_{}.log'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val,
                                         model_path, log_path)
 
@@ -222,6 +233,11 @@ if args.train_groc:
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
         model = 'GCMC'
+        bpr_flag = 'with_BPR'
+        if not args.with_bpr:
+            path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
+            Recmodel.load_state_dict(torch.load(path))
+            bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
@@ -238,9 +254,9 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/models/GROC_models/{}/{}_after_GROC_{}_{}.ckpt'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/log/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/log/GROC_logs/{}/{}_after_GROC_{}_{}.log'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
 
         print("===========================")
@@ -250,6 +266,11 @@ if args.train_groc:
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False, is_light_gcn=False)
         model = 'GCCF'
+        bpr_flag = 'with_BPR'
+        if not args.with_bpr:
+            path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/GCCF_baseline.ckpt'.format(args.dataset)
+            Recmodel.load_state_dict(torch.load(path))
+            bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
         utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
@@ -265,10 +286,10 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_after_GROC_{}.ckpt'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/models/GROC_models/{}/{}_after_GROC_{}_{}.ckpt'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
 
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/log/GROC_logs/{}/{}_after_GROC_{}.log'.format(args.dataset, model, args.loss_weight_bpr)
+                     '/log/GROC_logs/{}/{}_after_GROC_{}_{}.log'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
 
         print("===========================")
