@@ -235,7 +235,7 @@ if args.train_groc:
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
                    '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val,
-                                        model_path, log_path)
+                                        model_path, log_path, sparse=False)
 
         print("===========================")
         print("GROC training finished!")
@@ -274,7 +274,7 @@ if args.train_groc:
                      '/models/GROC_models/{}/{}_{}_after_GROC_{}_{}.ckpt'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr)
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
                      '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr)
-        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path, sparse=False)
 
         print("===========================")
         print("GROC training finished!")
@@ -313,7 +313,7 @@ if args.train_groc:
 
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
                      '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr)
-        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path, sparse=False)
 
         print("===========================")
         print("GROC training finished!")
