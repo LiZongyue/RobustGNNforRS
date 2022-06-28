@@ -70,6 +70,7 @@ def parse_args():
     parser.add_argument('--valid_freq', type=int, default=1, help='valid freq')
     parser.add_argument('--save_to', type=str, default='tmp', help='save path of ckpt and log')
     parser.add_argument('--val_batch_size', type=int, default=2048, help='val BS.')
+    parser.add_argument('--batch_size', type=int, default=2048, help='val BS.')
     parser.add_argument('--train_baseline', type=bool, default=False, help='train baseline.')
     parser.add_argument('--prepare_adj_data', type=bool, default=False, help='BS.')
     parser.add_argument('--model_gccf', type=bool, default=False, help='mask embedding of users/items of GCN')
