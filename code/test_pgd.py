@@ -198,6 +198,7 @@ if args.train_groc:
         print("===========================")
         print("GROC training finished!")
     if args.model_lightgcn:
+        adj = adj.to_dense().to(device)
         print("train model LightGCN")
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
@@ -205,13 +206,18 @@ if args.train_groc:
         bpr_flag = 'with_BPR'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
+            if not os.path.exists(path):
+                raise Exception("Baseline model not found. Please calibrate models first.")
             Recmodel.load_state_dict(torch.load(path))
+            # Recmodel._is_sparse = False
             bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
-        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
-        adj_2_hops = torch.load(adj_path).to(device)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items, adj)
+        adj_2_hops = torch.load(adj_path)
         Recmodel = Recmodel.to(device)
+        # d_mtr = d_mtr.to_dense().to(device)
+        adj_2_hops = adj_2_hops.to_dense().to(device)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
         if not os.path.exists(
@@ -234,6 +240,7 @@ if args.train_groc:
         print("GROC training finished!")
 
     if args.model_gcmc:
+        adj = adj.to_dense().to(device)
         print("train model GCMC")
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
@@ -241,14 +248,18 @@ if args.train_groc:
         bpr_flag = 'with_BPR'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
+            if not os.path.exists(path):
+                raise Exception("Baseline model not found. Please calibrate models first.")
             Recmodel.load_state_dict(torch.load(path))
+            # Recmodel._is_sparse = False
             bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
-        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
-        adj_2_hops = torch.load(adj_path).to(device)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items, adj)
+        adj_2_hops = torch.load(adj_path)
         Recmodel = Recmodel.to(device)
-        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        # d_mtr = d_mtr.to_dense().to(device)
+        adj_2_hops = adj_2_hops.to_dense().to(device)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset)):
@@ -267,20 +278,26 @@ if args.train_groc:
         print("===========================")
         print("GROC training finished!")
     if args.model_gccf:
+        adj = adj.to_dense().to(device)
         print("train model LR-GCCF")
         print("=================================================")
-        Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False, is_light_gcn=False)
+        Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
         model = 'GCCF'
         bpr_flag = 'with_BPR'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/GCCF_baseline.ckpt'.format(args.dataset)
+            if not os.path.exists(path):
+                raise Exception("Baseline model not found. Please calibrate models first.")
             Recmodel.load_state_dict(torch.load(path))
+            # Recmodel._is_sparse = False
             bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
-        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
-        adj_2_hops = torch.load(adj_path).to(device)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items, adj)
+        adj_2_hops = torch.load(adj_path)
         Recmodel = Recmodel.to(device)
+        # d_mtr = d_mtr.to_dense().to(device)
+        adj_2_hops = adj_2_hops.to_dense().to(device)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset)):
