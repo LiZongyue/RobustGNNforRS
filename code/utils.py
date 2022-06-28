@@ -75,23 +75,25 @@ def build_score(device, adj_u_i, args, num_users, num_items):
     adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/adj_insert.pt'.format(args.dataset)
     if not os.path.exists(adj_path):
         print("Starting calculate 3 hops neighbours...")
-        adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
-        adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i)
+        adj_after_1_hops = ((torch.mm(adj_u_i, adj_u_i) + adj_u_i) > 0.).float()
+        adj_after_2_hops = ((torch.mm(adj_after_1_hops, adj_after_1_hops) + adj_after_1_hops) > 0.).float()
+        # adj_after_1_hops = torch.mm(adj_u_i, adj_u_i.t())
+        # adj_after_2_hops = torch.mm(adj_after_1_hops, adj_u_i)
 
         del adj_after_1_hops
         if device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
 
-        adj_after_2_hops = adj_after_2_hops.bool()
-        adj_u_i = adj_u_i.bool()
+        adj_after_2_hops = adj_after_2_hops[:num_users, num_users:].bool()
+        adj_u_i = adj_u_i[:num_users, num_users:].bool()
 
         if device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
         print("Neighbours calculation finished!")
 
-        adj_insert = adj_after_2_hops ^ adj_u_i  # subtraction (XOR)
+        adj_insert = adj_after_2_hops ^ adj_u_i
 
         del adj_after_2_hops, adj_u_i
         if device != 'cpu':
@@ -173,14 +175,13 @@ def build_two_hop_adj(device, args, num_users, model, adj):
     return adj_2_hops
 
 
-def insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items):
+def insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items, adj):
     print("Constructing Adj_insert tensor for model {}...".format(model))
     if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj'):
         os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/adj')
     ori_adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/ori_adj.pt'.format(args.dataset)
     if not os.path.exists(adj_path):
-        build_score(device, to_tensor(dataset.UserItemNet.tolil().astype(np.float32), device=device).to_dense(),
-                    args, num_users, num_items)
+        build_score(device, adj, args, num_users, num_items)
         if device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()

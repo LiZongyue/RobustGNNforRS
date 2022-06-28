@@ -106,7 +106,11 @@ class NGCF(nn.Module):
         propagate methods for lightGCN
         """
         if adj_drop_out:
-            g_droped = self.sparse_dropout(adj, 0.2, adj._nnz())
+            if self._is_sparse:
+                g_droped = self.sparse_dropout(adj, 0.2, adj._nnz())
+            else:
+                adj = adj.to_sparse()
+                g_droped = self.sparse_dropout(adj, 0.2, adj._nnz()).to_dense()
         else:
             g_droped = adj
 
@@ -114,7 +118,10 @@ class NGCF(nn.Module):
         all_embedding = [all_emb]
 
         for k in range(self.n_layers):
-            side_embeddings = torch.sparse.mm(g_droped, all_emb)
+            if self._is_sparse:
+                side_embeddings = torch.sparse.mm(g_droped, all_emb)
+            else:
+                side_embeddings = torch.mm(g_droped, all_emb)
 
             # transformed sum messages of neighbors.
             sum_embeddings = torch.matmul(side_embeddings, self.weight_dict['W_gc_%d' % k]) \

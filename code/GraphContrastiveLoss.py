@@ -8,9 +8,10 @@ def ori_gcl_computing(ori_adj, trn_model, gra1, gra2, users, poss, args, device,
     """
     mask_1: prob of mask_1
     """
-
-    (_, pos_emb, _, _) = trn_model.getEmbedding(ori_adj, users.long(), poss.long(), query_groc=query_groc)
-
+    if model_name in ['NGCF', 'GCMC']:
+        (_, pos_emb, _, _) = trn_model.getEmbedding(ori_adj, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)
+    else:
+        (_, pos_emb, _, _) = trn_model.getEmbedding(ori_adj, users.long(), poss.long(), query_groc=query_groc)
     if flag:
         if model_name in ['NGCF', 'GCMC']:
             (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)

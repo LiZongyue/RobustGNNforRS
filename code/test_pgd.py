@@ -83,7 +83,7 @@ parser.add_argument('--save_to',                           type=str,   default='
 parser.add_argument('--val_batch_size',                 type=int,   default=2048,                                                                                                                                                help='BS.')
 parser.add_argument('--train_baseline',                 type=bool,   default=False,                                                                                                                                                help='BS.')
 parser.add_argument('--prepare_adj_data',                 type=bool,   default=False,                                                                                                                                                help='BS.')
-parser.add_argument('--with_bpr',                 type=bool,   default=True,                                                                                                                                                help='BS.')
+parser.add_argument('--with_bpr',                 type=bool,   default=False,                                                                                                                                                help='BS.')
 
 args = parser.parse_args()
 num_users = dataset.n_user
@@ -160,6 +160,7 @@ if args.train_baseline:
 
 if args.train_groc:
     if args.model_ngcf:
+        adj = adj.to_dense().to(device)
         print("train model NGCF")
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
@@ -167,14 +168,18 @@ if args.train_groc:
         bpr_flag = 'with_BPR'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
+            if not os.path.exists(path):
+                raise Exception("Baseline model not found. Please calibrate models first.")
             Recmodel.load_state_dict(torch.load(path))
+            # Recmodel._is_sparse = False
             bpr_flag = 'without_BPR'
         adj_path = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args.dataset,
                                                                                                      model)
-        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items)
-        adj_2_hops = torch.load(adj_path).to(device)
+        utils.insert_adj_construction_pipeline(adj_path, model, args, device, dataset, num_users, num_items, adj)
+        adj_2_hops = torch.load(adj_path)
         Recmodel = Recmodel.to(device)
-        groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
+        # d_mtr = d_mtr.to_dense().to(device)
+        adj_2_hops = adj_2_hops.to_dense().to(device)
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
         if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args.dataset)):
@@ -188,7 +193,7 @@ if args.train_groc:
                      '/models/GROC_models/{}/{}_after_GROC_{}_{}.ckpt'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
                      '/log/GROC_logs/{}/{}_after_GROC_{}_{}.log'.format(args.dataset, model, bpr_flag, args.loss_weight_bpr)
-        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path)
+        groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path, sparse=False)
 
         print("===========================")
         print("GROC training finished!")
