@@ -3,15 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def ori_gcl_computing(ori_adj, trn_model, gra1, gra2, users, poss, args, device, flag=False, mask_1=None, mask_2=None,
+def ori_gcl_computing(trn_model, gra1, gra2, users, poss, args, device, flag=False, mask_1=None, mask_2=None,
                       query_groc=None, model_name=None):
     """
     mask_1: prob of mask_1
     """
-    if model_name in ['NGCF', 'GCMC']:
-        (_, pos_emb, _, _) = trn_model.getEmbedding(ori_adj, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)
-    else:
-        (_, pos_emb, _, _) = trn_model.getEmbedding(ori_adj, users.long(), poss.long(), query_groc=query_groc)
     if flag:
         if model_name in ['NGCF', 'GCMC']:
             (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), query_groc=query_groc, adj_drop_out=False)
@@ -46,7 +42,7 @@ def ori_gcl_computing(ori_adj, trn_model, gra1, gra2, users, poss, args, device,
     users_dot_12 /= args.T_groc
     fenzi_12 = torch.exp(users_dot_12).sum(1)
 
-    neg_emb_users_12 = users_emb_perturb_2.unsqueeze(0).repeat(pos_emb.size(0), 1, 1)
+    neg_emb_users_12 = users_emb_perturb_2.unsqueeze(0).repeat(len(poss), 1, 1)
     neg_dot_12 = torch.bmm(neg_emb_users_12, users_emb_perturb_1.unsqueeze(2)).squeeze(2)
     neg_dot_12 /= args.T_groc
     neg_dot_12 = torch.exp(neg_dot_12).sum(1)
@@ -60,7 +56,7 @@ def ori_gcl_computing(ori_adj, trn_model, gra1, gra2, users, poss, args, device,
     users_dot_21 /= args.T_groc
     fenzi_21 = torch.exp(users_dot_21).sum(1)
 
-    neg_emb_users_21 = users_emb_perturb_1.unsqueeze(0).repeat(pos_emb.size(0), 1, 1)
+    neg_emb_users_21 = users_emb_perturb_1.unsqueeze(0).repeat(len(poss), 1, 1)
     neg_dot_21 = torch.bmm(neg_emb_users_21, users_emb_perturb_2.unsqueeze(2)).squeeze(2)
     neg_dot_21 /= args.T_groc
     neg_dot_21 = torch.exp(neg_dot_21).sum(1)

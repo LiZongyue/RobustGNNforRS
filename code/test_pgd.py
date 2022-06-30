@@ -84,7 +84,8 @@ parser.add_argument('--save_to',                           type=str,   default='
 parser.add_argument('--val_batch_size',                 type=int,   default=2048,                                                                                                                                                help='BS.')
 parser.add_argument('--train_baseline',                 type=bool,   default=False,                                                                                                                                                help='BS.')
 parser.add_argument('--prepare_adj_data',                 type=bool,   default=False,                                                                                                                                                help='BS.')
-parser.add_argument('--with_bpr',                 type=bool,   default=False,                                                                                                                                                help='BS.')
+parser.add_argument('--with_bpr',                 type=bool,   default=False,                                                                                                                                                help='Import baseline and train with bpr loss backwards.')
+parser.add_argument('--with_bpr_gradient',                 type=bool,   default=False,                                                                                                                                                help='GROC adj insert/remove with bpr gradient signals.')
 
 args = parser.parse_args()
 num_users = dataset.n_user
@@ -167,6 +168,9 @@ if args.train_groc:
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
         model = 'NGCF'
         bpr_flag = 'with_BPR'
+        bpr_gradient = 'without_bpr_gradient'
+        if args.with_bpr_gradient:
+            bpr_gradient = 'with_bpr_gradient'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
             if not os.path.exists(path):
@@ -191,9 +195,9 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_{}_after_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/models/GROC_models/{}/{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/log/GROC_logs/{}/{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path, sparse=False)
 
         print("===========================")
@@ -205,6 +209,9 @@ if args.train_groc:
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
         model = 'LightGCN'
         bpr_flag = 'with_BPR'
+        bpr_gradient = 'without_bpr_gradient'
+        if args.with_bpr_gradient:
+            bpr_gradient = 'with_bpr_gradient'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
             if not os.path.exists(path):
@@ -230,10 +237,10 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_{}_after_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/models/GROC_models/{}/{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
 
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                   '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                   '/log/GROC_logs/{}/{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val,
                                         model_path, log_path, sparse=False)
 
@@ -247,6 +254,9 @@ if args.train_groc:
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
         model = 'GCMC'
         bpr_flag = 'with_BPR'
+        bpr_gradient = 'without_bpr_gradient'
+        if args.with_bpr_gradient:
+            bpr_gradient = 'with_bpr_gradient'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
             if not os.path.exists(path):
@@ -271,9 +281,9 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_{}_after_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/models/GROC_models/{}/{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/log/GROC_logs/{}/{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path, sparse=False)
 
         print("===========================")
@@ -285,6 +295,9 @@ if args.train_groc:
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
         model = 'GCCF'
         bpr_flag = 'with_BPR'
+        bpr_gradient = 'without_bpr_gradient'
+        if args.with_bpr_gradient:
+            bpr_gradient = 'with_bpr_gradient'
         if not args.with_bpr:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/GCCF_baseline.ckpt'.format(args.dataset)
             if not os.path.exists(path):
@@ -309,10 +322,10 @@ if args.train_groc:
             os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args.dataset))
         groc = GROC_loss(Recmodel, adj, d_mtr, adj_2_hops, args)
         model_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/models/GROC_models/{}/{}_{}_after_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/models/GROC_models/{}/{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
 
         log_path = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                     '/log/GROC_logs/{}/{}_{}_after_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_flag, args.loss_weight_bpr, args.batch_size)
+                     '/log/GROC_logs/{}/{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args.dataset, today, model, bpr_gradient, bpr_flag, args.loss_weight_bpr, args.batch_size)
         groc.groc_train_with_bpr_sparse(data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, model_path, log_path, sparse=False)
 
         print("===========================")

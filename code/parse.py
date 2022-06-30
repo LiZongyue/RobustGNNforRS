@@ -28,7 +28,7 @@ def parse_args():
                         help="the fold num used to split large adj matrix, like gowalla")
     parser.add_argument('--testbatch', type=int, default=100,
                         help="the batch size of users for testing")
-    parser.add_argument('--dataset', type=str, default='amazon-book',
+    parser.add_argument('--dataset', type=str, default='ml-1m',
                         help="available datasets: [lastfm, gowalla, yelp2018, amazon-book, ml-1m]")
     parser.add_argument('--path', type=str, default="./checkpoints",
                         help="path to save weights")
@@ -76,5 +76,7 @@ def parse_args():
     parser.add_argument('--model_gccf', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--model_gcmc', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--with_bpr', type=bool, default=False, help='BS.')
+    parser.add_argument('--with_bpr_gradient', type=bool, default=False,
+                        help='GROC adj insert/remove with bpr gradient signals.')
 
     return parser.parse_args()

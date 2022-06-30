@@ -811,7 +811,7 @@ class GROC_loss(nn.Module):
                 val_aver_groc_loss = val_aver_groc_loss / total_val_batch
                 save = False
 
-                if val_max_groc_loss > val_aver_groc_loss and val_max_loss > val_aver_loss and val_max_bpr_loss > val_aver_bpr_loss:
+                if val_max_loss > val_aver_loss:
                     save = True
                     eval_log.append(f'Valid loss score decreased from {val_max_loss} to {val_aver_loss}')
                     eval_log.append(f'Valid bpr loss score decreased from {val_max_bpr_loss} to {val_aver_bpr_loss}')
@@ -835,45 +835,6 @@ class GROC_loss(nn.Module):
                 eval_log.append("=========================")
 
                 utils.append_log_to_file(eval_log, i, log_file_name)
-
-    def groc_val_with_bpr(self, users, posItems, negItems, i, sparse=True):
-        self.ori_model.eval()
-        total_batch = len(users) // self.args.batch_size + 1
-        ori_adj_sparse = utils.normalize_adj_tensor(self.ori_adj, self.d_mtr, sparse=sparse).to(self.device)  # bpr loss
-
-        users = users.to(self.device)
-        posItems = posItems.to(self.device)
-        negItems = negItems.to(self.device)
-        users, posItems, negItems = utils.shuffle(users, posItems, negItems)
-
-        aver_loss = 0.
-        aver_bpr_loss = 0.
-        aver_groc_loss = 0.
-        for (batch_i, (batch_users, batch_pos, batch_neg)) \
-                in enumerate(utils.minibatch(users, posItems, negItems, batch_size=self.args.val_batch_size)):
-            loss, bpr_loss, groc_loss = self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse)
-
-            aver_loss += loss.cpu().item()
-            aver_bpr_loss += bpr_loss.cpu().item()
-            aver_groc_loss += groc_loss.cpu().item()
-
-        aver_loss = aver_loss / total_batch
-        aver_bpr_loss = aver_bpr_loss / total_batch
-        aver_dcl_loss = aver_groc_loss / total_batch
-
-        now = datetime.now()
-
-        current_time = now.strftime("%H:%M:%S")
-        print("Current Time =", current_time)
-        print("=======================")
-
-        print("Epoch: {}:".format(i))
-        print("VAL GROC Loss: ", aver_loss)
-        print("VAL BPR Loss: ", aver_bpr_loss)
-        print("VAL DCL Loss: ", aver_dcl_loss)
-        print("=========================")
-
-        return aver_loss, aver_bpr_loss, aver_dcl_loss
 
     def groc_train_with_bpr_one_batch(self, batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, tril_adj_index_0, tril_adj_index_1, sparse):
         loss, bpr_loss, groc_loss = self.forward_pass_groc_with_bpr(batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse)
@@ -915,12 +876,21 @@ class GROC_loss(nn.Module):
         adj_for_loss_gradient.requires_grad = True
         # self.ori_adj.requires_grad=True
         model_name = self.ori_model.__class__.__name__
-        loss_for_grad = ori_gcl_computing(self.ori_adj, self.ori_model, adj_for_loss_gradient,
+        loss_for_grad = ori_gcl_computing(self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
                                           self.args.mask_prob_2, query_groc=True, model_name=model_name)
+        if self.args.with_bpr_gradient:
+            if model_name in ['NGCF', 'GCMC']:
+                bpr_loss, reg_loss = self.ori_model.bpr_loss(adj_for_loss_gradient, batch_users, batch_pos, batch_neg, adj_drop_out=True)
+            else:
+                bpr_loss, reg_loss = self.ori_model.bpr_loss(adj_for_loss_gradient, batch_users, batch_pos, batch_neg)
+            reg_loss = reg_loss * self.ori_model.weight_decay
+            loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * loss_for_grad
 
-        edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
+            edge_gradient = torch.autograd.grad(loss, adj_for_loss_gradient, retain_graph=True)[0]
+        else:
+            edge_gradient = torch.autograd.grad(loss_for_grad, adj_for_loss_gradient, retain_graph=True)[0]
 
         del adj_for_loss_gradient, loss_for_grad
         gc.collect()
@@ -970,7 +940,7 @@ class GROC_loss(nn.Module):
         gc.collect()
         if val:
             self.ori_model.requires_grad_(False)
-        groc_loss = ori_gcl_computing(self.ori_adj, self.ori_model, adj_norm_1, adj_norm_2, batch_users,
+        groc_loss = ori_gcl_computing(self.ori_model, adj_norm_1, adj_norm_2, batch_users,
                                       batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
                                       mask_2=self.args.mask_prob_2, model_name=model_name)
 
