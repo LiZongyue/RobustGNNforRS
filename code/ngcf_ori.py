@@ -239,13 +239,17 @@ class NGCF(nn.Module):
             os.mkdir(local_path + '/models/{}'.format(dataset))
         if not os.path.exists(local_path + '/log/{}'.format(dataset)):
             os.mkdir(local_path + '/log/{}'.format(dataset))
+        if self.use_dcl:
+            use_dcl = 'use_dcl'
+        else:
+            use_dcl = 'no_use_dcl'
 
         if self.is_gcmc:
-            checkpoint_file_name = '{}/models/{}/GCMC_baseline.ckpt'.format(local_path, dataset)
-            log_file_name = '{}/log/{}/GCMC_baseline.log'.format(local_path, dataset)
+            checkpoint_file_name = '{}/models/{}/GCMC_baseline_{}.ckpt'.format(local_path, dataset, use_dcl)
+            log_file_name = '{}/log/{}/GCMC_baseline_{}.log'.format(local_path, dataset, use_dcl)
         else:
-            checkpoint_file_name = '{}/models/{}/NGCF_baseline.ckpt'.format(local_path, dataset)
-            log_file_name = '{}/log/{}/NGCF_baseline.log'.format(local_path, dataset)
+            checkpoint_file_name = '{}/models/{}/NGCF_baseline_{}.ckpt'.format(local_path, dataset, use_dcl)
+            log_file_name = '{}/log/{}/NGCF_baseline_{}.log'.format(local_path, dataset, use_dcl)
 
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         min_val_loss = float('Inf')
@@ -302,7 +306,10 @@ class NGCF(nn.Module):
 
                 aver_val_loss = aver_val_loss / total_batch_val
                 eval_log.append("Valid Epoch: {}:".format(i))
-                eval_log.append("average Val Loss NGCF: {}:".format(aver_val_loss))
+                if self.is_gcmc:
+                    eval_log.append("average Val Loss GCMC: {}:".format(aver_val_loss))
+                else:
+                    eval_log.append("average Val Loss NGCF: {}:".format(aver_val_loss))
 
                 if aver_val_loss < min_val_loss:
                     save = True

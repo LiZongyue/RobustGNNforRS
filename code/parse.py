@@ -73,6 +73,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=2048, help='val BS.')
     parser.add_argument('--train_baseline', type=bool, default=False, help='train baseline.')
     parser.add_argument('--prepare_adj_data', type=bool, default=False, help='BS.')
+    parser.add_argument('--use_dcl', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--model_gccf', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--model_gcmc', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--with_bpr', type=bool, default=False, help='BS.')
