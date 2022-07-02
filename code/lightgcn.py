@@ -24,8 +24,6 @@ class LightGCN(nn.Module):
         self.is_lightgcn = is_light_gcn
         self.use_dcl = use_dcl
         self.train_groc = train_groc
-        if train_groc:
-            self.adj = nn.Parameter(torch.sparse_coo_tensor(size=(self.adj_shape, self.adj_shape)))
 
         self.tau_plus = 1e-3
         self.T = 0.07
@@ -67,7 +65,12 @@ class LightGCN(nn.Module):
         rating = self.f(torch.matmul(users_emb, items_emb.t()))
         return rating
 
-    def computer(self, adj, delta_u=None, delta_i=None):
+    def mask_embedding(self, embed, mask):
+        mask = embed.weight.data.new_empty((embed.weight.size(0), 1)).bernoulli_(1 - mask).expand_as(embed.weight) / (1 - mask)
+        masked_embed_weight = mask * embed.weight
+        return torch.nn.functional.embedding(masked_embed_weight)
+
+    def computer(self, adj, delta_u=None, delta_i=None, mask=None):
         """
         propagate methods for lightGCN
         """
@@ -111,15 +114,11 @@ class LightGCN(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, query_groc=False):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, mask=None):
         """
         query from GROC means that we want to push adj into computational graph
         """
-        if self.train_groc:
-            self.adj = nn.Parameter(adj)
-            all_users, all_items = self.computer(self.adj)
-        else:
-            all_users, all_items = self.computer(adj)
+        all_users, all_items = self.computer(adj)
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
         # neg_emb = all_items[neg_items]

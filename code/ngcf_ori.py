@@ -100,7 +100,7 @@ class NGCF(nn.Module):
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
 
-    def computer(self, adj, adj_drop_out=True):
+    def computer(self, adj, adj_drop_out=True, mask=None):
         # TODO: override lightGCN here
         """
         propagate methods for lightGCN
@@ -164,12 +164,12 @@ class NGCF(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, query_groc=False, adj_drop_out=True):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, adj_drop_out=True, mask=None):
         """
         query from GROC means that we want to push adj into computational graph
         """
 
-        all_users, all_items = self.computer(adj, adj_drop_out)
+        all_users, all_items = self.computer(adj, adj_drop_out, mask)
 
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]

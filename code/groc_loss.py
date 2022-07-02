@@ -879,7 +879,7 @@ class GROC_loss(nn.Module):
         loss_for_grad = ori_gcl_computing(self.ori_model, adj_for_loss_gradient,
                                           adj_for_loss_gradient, batch_users, batch_pos, self.args,
                                           self.device, True, self.args.mask_prob_1,
-                                          self.args.mask_prob_2, query_groc=True, model_name=model_name)
+                                          self.args.mask_prob_2, model_name=model_name)
         if self.args.with_bpr_gradient:
             if model_name in ['NGCF', 'GCMC']:
                 bpr_loss, reg_loss = self.ori_model.bpr_loss(adj_for_loss_gradient, batch_users, batch_pos, batch_neg, adj_drop_out=True)
