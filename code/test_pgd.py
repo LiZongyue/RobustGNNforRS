@@ -261,7 +261,7 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
     rate: drop rate
     """
     baseline_.train()
-    gradient_adj = torch.zeros(adj_.size())
+    gradient_adj = torch.zeros(adj_.size()).to(device_)
     ori_adj_sparse = utils.normalize_adj_tensor(adj_).to_sparse()  # for bpr loss
 
     adj_perturb = None
@@ -302,7 +302,7 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
             # TODO: remove who? Largest or Smallest?
             gradient_adj = gradient_adj * adj_
             v, i = torch.topk(gradient_adj.flatten(), perturbations_, largest=largest)
-            ind_rm = torch.tensor(np.array(np.unravel_index(i.numpy(), gradient_adj.shape)).T).reshape(2, -1).to(device_)
+            ind_rm = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), gradient_adj.shape)).T).reshape(2, -1).to(device_)
             m = (torch.rand(perturbations_) > 0.6).to(device_)  # 0.4 * 0.5 = 0.2 drop
             ind_rm = ind_rm[:, m]
             val_rm = torch.ones(ind_rm.shape[1]).to(device_)
