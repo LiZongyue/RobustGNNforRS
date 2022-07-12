@@ -114,6 +114,10 @@ parser.add_argument('--val_batch_size', type=int, default=2048, help='BS.')
 parser.add_argument('--train_baseline', type=bool, default=False, help='BS.')
 parser.add_argument('--prepare_adj_data', type=bool, default=False, help='BS.')
 parser.add_argument('--with_bpr', type=bool, default=False, help='Import baseline and train with bpr loss backwards.')
+parser.add_argument('--train_groc_pipeline', type=bool, default=False, help='GROC training')
+parser.add_argument('--double_loss_baseline', type=bool, default=False, help='CL for RS baseline ')
+parser.add_argument('--baseline_single_loss', type=bool, default=False, help='baseline with one loss. DCL or BPR')
+parser.add_argument('--train_with_bpr_perturb', type=bool, default=False, help='GROC training controller. GCL_DCL training ')
 parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                     help='GROC adj insert/remove with bpr gradient signals.')
 
@@ -168,6 +172,55 @@ users_val, posItems_val, negItems_val = utils.getTestSet(dataset)
 
 data_len = len(users)
 
+
+def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, adj_, Recmodel_, d_mtr_, today_,
+                    bpr_gradient_, bpr_flag_, data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
+                    negItems_val_):
+    adj_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args_.dataset,
+                                                                                                  model_)
+    utils.insert_adj_construction_pipeline(adj_path_, model_, args_, device_, dataset_, num_users_, num_items_,
+                                           adj_)
+    adj_2_hops_ = torch.load(adj_path_)
+    Recmodel_ = Recmodel_.to(device)
+    adj_2_hops_ = adj_2_hops_.to_dense().to(device)
+    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
+    if not os.path.exists(
+            os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args_.dataset)):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args_.dataset))
+    if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs'):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs')
+    if not os.path.exists(
+            os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args_.dataset)):
+        os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args_.dataset))
+    if args_.use_dcl:
+        dcl = 'use_dcl'
+    else:
+        dcl = 'no_use_dcl'
+    adj_rm_1 = None
+    adj_rm_2 = None
+
+    groc_ = GROC_loss(Recmodel_, adj_, d_mtr_, adj_2_hops_, args_)
+    if args.double_loss_baseline:
+        adj_rm_1 = groc_.attack_adjs(perturbations, 0.2, users, posItems, negItems)
+        adj_rm_2 = groc_.attack_adjs(perturbations, 0.2, users, posItems, negItems)
+    model_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                  '/models/GROC_models/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args_.dataset, today_,
+                                                                                       model_, dcl, bpr_gradient_,
+                                                                                       bpr_flag_, args_.loss_weight_bpr,
+                                                                                       args_.batch_size)
+    log_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
+                '/log/GROC_logs/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args_.dataset, today_, model_, dcl,
+                                                                               bpr_gradient_, bpr_flag_,
+                                                                               args_.loss_weight_bpr, args_.batch_size)
+    groc_.groc_train_with_bpr_sparse(data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
+                                     negItems_val_, model_path_, log_path_, adj_rm_1=adj_rm_1, adj_rm_2=adj_rm_2,
+                                     sparse=False)
+
+    print("===========================")
+    print("GROC training finished!")
+
+
 if args.train_baseline:
     def train_baseline(baseline, ori_adj_tensor, degree_mtx, all_users, pos_items_pair, neg_items_sample, all_users_val,
                        pos_items_pair_val, neg_items_sample_val, dataset_):
@@ -175,70 +228,60 @@ if args.train_baseline:
         baseline.fit(ori_adj_tensor, degree_mtx, all_users, pos_items_pair, neg_items_sample, all_users_val,
                      pos_items_pair_val, neg_items_sample_val, dataset_)
 
+    if args.baseline_single_loss:
+        if args.model_ngcf:
+            print("NGCF Baseline Model Calibration.")
+            model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
+            train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
+                           args.dataset)
+        if args.model_gcmc:
+            print("GCMC Baseline Model Calibration.")
+            model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
+            train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
+                           args.dataset)
+        if args.model_lightgcn:
+            print("LightGCN Baseline Model Calibration.")
+            model = lightgcn.LightGCN(device, num_users, num_items, use_dcl=args.use_dcl)
+            train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
+                           args.dataset)
+        if args.model_gccf:
+            print("LR-GCCF Baseline Model Calibration.")
+            model = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
+            train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
+                           args.dataset)
+    elif args.double_loss_baseline:
+        adj = adj.to_dense().to(device)
+        bpr_gradient = 'baseline'
+        bpr_flag = 'double_loss'
+        if args.model_ngcf:
+            print("NGCF Baseline Model with double Loss Calibration.")
+            model = 'NGCF'
+            Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
+            train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
-    if args.model_ngcf:
-        print("NGCF Baseline Model Calibration.")
-        model = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
-        train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
-                       args.dataset)
-    if args.model_gcmc:
-        print("GCMC Baseline Model Calibration.")
-        model = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
-        train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
-                       args.dataset)
-    if args.model_lightgcn:
-        print("LightGCN Baseline Model Calibration.")
-        model = lightgcn.LightGCN(device, num_users, num_items, use_dcl=args.use_dcl)
-        train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
-                       args.dataset)
-    if args.model_gccf:
-        print("LR-GCCF Baseline Model Calibration.")
-        model = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
-        train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
-                       args.dataset)
+        if args.model_lightgcn:
+            print("LightGCN Baseline Model with double Loss Calibration.")
+            model = 'LightGCN'
+            Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
+            train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+
+        if args.model_gccf:
+            print("GCCF Baseline Model with double Loss Calibration.")
+            model = 'GCCF'
+            Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
+            train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+
+        if args.model_gcmc:
+            print("GCMC Baseline Model with double Loss Calibration.")
+            model = 'GCMC'
+            Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
+            train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
 
 if args.train_groc:
-    def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, adj_, Recmodel_, d_mtr_, today_,
-                        bpr_gradient_,
-                        bpr_flag_, data_len_, users_, posItems_, negItems_, users_val_, posItems_val_, negItems_val_):
-        adj_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args_.dataset,
-                                                                                                      model_)
-        utils.insert_adj_construction_pipeline(adj_path_, model_, args_, device_, dataset_, num_users_, num_items_,
-                                               adj_)
-        adj_2_hops_ = torch.load(adj_path_)
-        Recmodel_ = Recmodel_.to(device)
-        adj_2_hops_ = adj_2_hops_.to_dense().to(device)
-        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models'):
-            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models')
-        if not os.path.exists(
-                os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args_.dataset)):
-            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/models/GROC_models/{}'.format(args_.dataset))
-        if not os.path.exists(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs'):
-            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs')
-        if not os.path.exists(
-                os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args_.dataset)):
-            os.mkdir(os.path.abspath(os.path.dirname(os.getcwd())) + '/log/GROC_logs/{}'.format(args_.dataset))
-        if args_.use_dcl:
-            dcl = 'use_dcl'
-        else:
-            dcl = 'no_use_dcl'
-        groc_ = GROC_loss(Recmodel_, adj_, d_mtr_, adj_2_hops_, args_)
-        model_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                      '/models/GROC_models/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args_.dataset, today_,
-                                                                                           model_, dcl, bpr_gradient_,
-                                                                                           bpr_flag_, args_.loss_weight_bpr,
-                                                                                           args_.batch_size)
-        log_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                    '/log/GROC_logs/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args_.dataset, today_, model_, dcl,
-                                                                                   bpr_gradient_, bpr_flag_,
-                                                                                   args_.loss_weight_bpr, args_.batch_size)
-        groc_.groc_train_with_bpr_sparse(data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
-                                         negItems_val_, model_path_, log_path_, sparse=False)
-
-        print("===========================")
-        print("GROC training finished!")
-
-
     if args.model_ngcf:
         adj = adj.to_dense().to(device)
         print("train model NGCF")

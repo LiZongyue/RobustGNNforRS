@@ -77,6 +77,11 @@ def parse_args():
     parser.add_argument('--model_gccf', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--model_gcmc', type=bool, default=False, help='mask embedding of users/items of GCN')
     parser.add_argument('--with_bpr', type=bool, default=False, help='BS.')
+    parser.add_argument('--train_groc_pipeline', type=bool, default=False, help='GROC training')
+    parser.add_argument('--double_loss_baseline', type=bool, default=False,
+                        help='GROC training. When False, GCL_DCL training ')
+    parser.add_argument('--train_with_bpr_perturb', type=bool, default=False,
+                        help='GROC training controller. GCL_DCL training ')
     parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                         help='GROC adj insert/remove with bpr gradient signals.')
 

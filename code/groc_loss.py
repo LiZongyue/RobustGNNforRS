@@ -177,21 +177,70 @@ class GROC_loss(nn.Module):
 
         return adj_insert_remove
 
-    def attack_adjs(self, adj_a, adj_b, perturbations, users, posItems, negItems):
-        modified_adj_a = attack_model(self.ori_model, adj_a, perturbations, self.args.path_modified_adj,
-                                      self.args.modified_adj_name_with_rdm_ptb_a, self.args.modified_adj_id,
-                                      users, posItems, negItems, self.ori_model.num_users, self.device)
+    def attack_adjs(self, perturbations, rate, users, posItems, negItems, drop_only=True):
+        """
+        perturbations: # of perturbated edges
+        rate: drop rate
+        """
+        self.ori_model.train()
+        gradient_adj = torch.zeros(self.ori_adj.size())
+        ori_adj_sparse = utils.normalize_adj_tensor(self.ori_adj).to_sparse()  # for bpr loss
+        tril_adj_index = torch.tril_indices(row=len(self.ori_adj), col=len(self.ori_adj), offset=0)
+        tril_adj_index = tril_adj_index.to(self.device)
+        tril_adj_index_0 = tril_adj_index[0]
+        tril_adj_index_1 = tril_adj_index[1]
+        adj_perturb = None
+        if drop_only:
+            if self.args.double_loss_baseline:
+                random_tensor = 1 - rate
+                sparse_adj = self.ori_adj.to_sparse().to(self.device)
+                random_tensor += torch.rand(sparse_adj._nnz()).to(self.device)
+                dropout_mask = torch.floor(random_tensor).type(torch.bool)
+                i = sparse_adj._indices()
+                v = sparse_adj._values()
 
-        modified_adj_b = attack_model(self.ori_model, adj_b, perturbations, self.args.path_modified_adj,
-                                      self.args.modified_adj_name_with_rdm_ptb_b, self.args.modified_adj_id,
-                                      users, posItems, negItems, self.ori_model.num_users, self.device)
+                i = i[:, dropout_mask]
+                v = v[dropout_mask]
 
-        try:
-            print("modified adjacency matrix are not same:", (modified_adj_a == modified_adj_b).all())
-        except AttributeError:
-            print("2 modified adjacency matrix are same. Check your perturbation value")
+                out = torch.sparse.FloatTensor(i, v, self.ori_adj.shape).to(self.device)
+                adj_perturb = (out * (1. / (1 - rate))).to_dense().to(self.device)
+            else:
+                adj_remove = self.ori_adj.clone().to(self.device)
+                for i in range(100):
+                    self.train()
+                    users = users.to(self.device)
+                    posItems = posItems.to(self.device)
+                    negItems = negItems.to(self.device)
+                    users, posItems, negItems = utils.shuffle(users, posItems, negItems)
 
-        return modified_adj_a, modified_adj_b
+                    for (batch_i,
+                         (batch_users,
+                          batch_pos,
+                          batch_neg)) in enumerate(utils.minibatch(users,
+                                                                   posItems,
+                                                                   negItems,
+                                                                   batch_size=2048)):
+                        ori_adj_sparse.requires_grad = True
+                        loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
+                        reg_loss = reg_loss * self.ori_model.weight_decay
+                        loss = loss + reg_loss
+
+                        gradient_bpr = torch.autograd.grad(loss, ori_adj_sparse, retain_graph=True)[0].to_dense()
+                        gradient_adj = gradient_adj + gradient_bpr
+                # TODO: remove who? Largest or Smallest?
+                gradient_adj = gradient_adj[tril_adj_index_1, tril_adj_index_0]
+                _, ind_rm = torch.topk(gradient_adj, perturbations, largest=False)
+                low_tril_matrix = adj_remove[tril_adj_index_0, tril_adj_index_1]
+                up_tril_matrix = adj_remove[tril_adj_index_1, tril_adj_index_0]
+                low_tril_matrix[ind_rm] = 0.
+                up_tril_matrix[ind_rm] = 0.
+
+                adj_remove[tril_adj_index_0, tril_adj_index_1] = low_tril_matrix
+                adj_remove[tril_adj_index_1, tril_adj_index_0] = up_tril_matrix
+
+                adj_perturb = adj_remove
+
+        return adj_perturb
 
     @staticmethod
     def get_negative_mask_perturb(batch_size):
@@ -214,7 +263,7 @@ class GROC_loss(nn.Module):
 
         return optimizer
 
-    def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val, checkpoint_file_name, log_file_name, sparse=True):
+    def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val, checkpoint_file_name, log_file_name, adj_rm_1=None, adj_rm_2=None, sparse=True):
         self.ori_model.train()
         embedding_param = []
         adj_param = []
@@ -247,12 +296,19 @@ class GROC_loss(nn.Module):
 
             for (batch_i, (batch_users, batch_pos, batch_neg)) \
                     in enumerate(utils.minibatch(users, posItems, negItems, batch_size=self.args.batch_size)):
-                if self.args.with_bpr:
+
+                if self.args.train_groc_pipeline:  # GROC training, Towards Robust GNN
+                    if self.args.with_bpr:
+                        loss, bpr_loss, groc_loss = \
+                            self.groc_train_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, tril_adj_index_0, tril_adj_index_1, sparse)
+                    else:
+                        loss, bpr_loss, groc_loss = \
+                            self.groc_train_without_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, tril_adj_index_0, tril_adj_index_1, sparse)
+                elif self.args.train_with_bpr_perturb:  # perturb adj with bpr gradient, train as CL for RS
                     loss, bpr_loss, groc_loss = \
-                        self.groc_train_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, tril_adj_index_0, tril_adj_index_1, sparse)
+                        self.clrs_train_with_gradient_perturb_one_batch(adj_rm_1, adj_rm_2, batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, sparse, False)
                 else:
-                    loss, bpr_loss, groc_loss = \
-                        self.groc_train_without_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, tril_adj_index_0, tril_adj_index_1, sparse)
+                    raise Exception("No Training process is running.")
                 aver_loss += loss.cpu().item()
                 aver_bpr_loss += bpr_loss.cpu().item()
                 aver_groc_loss += groc_loss.cpu().item()
@@ -286,8 +342,17 @@ class GROC_loss(nn.Module):
                 users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
                 for (batch_i, (batch_users, batch_pos, batch_neg)) \
                         in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
-                    val_loss, val_bpr_loss, val_dcl_loss = \
-                        self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse)
+                    if self.args.train_groc_pipeline:
+                        val_loss, val_bpr_loss, val_dcl_loss = \
+                            self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse)
+                    elif self.args.train_with_bpr_perturb:  # perturb adj with bpr gradient, train as CL for RS
+                        val_loss, val_bpr_loss, val_dcl_loss = \
+                            self.clrs_train_with_gradient_perturb_one_batch(adj_rm_1, adj_rm_2, batch_users, batch_pos,
+                                                                            batch_neg, ori_adj_sparse, optimizer, scheduler,
+                                                                            sparse, True)
+                    else:
+                        raise Exception("No validation process is running.")
+
                     val_aver_loss += val_loss.cpu().item()
                     val_aver_bpr_loss += val_bpr_loss.cpu().item()
                     val_aver_groc_loss += val_dcl_loss.cpu().item()
@@ -341,8 +406,48 @@ class GROC_loss(nn.Module):
 
         return loss, bpr_loss, groc_loss
 
+    def clrs_train_with_gradient_perturb_one_batch(self, adj_rm_1, adj_rm_2, batch_users, batch_pos, batch_neg, ori_adj_sparse, optimizer, scheduler, sparse, val):
+        loss, bpr_loss, groc_loss = self.forward_pass_clrs_with_gradient_perturb(adj_rm_1, adj_rm_2, batch_users, batch_pos, batch_neg, ori_adj_sparse, sparse, val)
+        if not val:
+            loss.backward()
+            optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
+
+        return loss, bpr_loss, groc_loss
+
     def groc_val_with_bpr_one_batch(self, batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse):
         loss, bpr_loss, groc_loss = self.forward_pass_groc_with_bpr(batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse, val=True)
+
+        return loss, bpr_loss, groc_loss
+
+    def forward_pass_clrs_with_gradient_perturb(self, adj_rm_1, adj_rm_2, batch_users, batch_pos, batch_neg, ori_adj_sparse, sparse, val):
+        self.ori_model.requires_grad_(True)
+
+        # Normalize perturbed adj (with insertion)
+        if sparse:
+            adj_rm_norm_1 = utils.normalize_adj_tensor(adj_rm_1, self.d_mtr, sparse=True)
+            adj_rm_norm_2 = utils.normalize_adj_tensor(adj_rm_2, self.d_mtr, sparse=True)
+        else:
+            adj_rm_norm_1 = utils.normalize_adj_tensor(adj_rm_1.to_sparse(), self.d_mtr, sparse=True)
+            adj_rm_norm_2 = utils.normalize_adj_tensor(adj_rm_2.to_sparse(), self.d_mtr, sparse=True)
+
+        if val:
+            self.ori_model.requires_grad_(False)
+        model_name = self.ori_model.__class__.__name__
+        groc_loss = ori_gcl_computing(self.ori_model, adj_rm_norm_1, adj_rm_norm_2, batch_users,
+                                      batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
+                                      mask_2=self.args.mask_prob_2, model_name=model_name)
+        if self.device != 'cpu':
+            torch.cuda.empty_cache()
+        gc.collect()
+        if model_name in ['NGCF', 'GCMC']:
+            bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg,
+                                                         adj_drop_out=True)
+        else:
+            bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
+        reg_loss = reg_loss * self.ori_model.weight_decay
+        loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
 
         return loss, bpr_loss, groc_loss
 
