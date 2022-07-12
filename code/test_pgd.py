@@ -285,20 +285,19 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
             negItems = negItems_.to(device_)
             users, posItems, negItems = utils.shuffle(users, posItems, negItems)
 
-            for i in range(100):
-                baseline_.train()
-                for (batch_i,
-                     (batch_users,
-                      batch_pos,
-                      batch_neg)) in enumerate(utils.minibatch(users,
-                                                               posItems,
-                                                               negItems,
-                                                               batch_size=2048)):
-                    ori_adj_sparse.requires_grad = True
-                    bpr_loss, _ = baseline_.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
+            baseline_.train()
+            for (batch_i,
+                 (batch_users,
+                  batch_pos,
+                  batch_neg)) in enumerate(utils.minibatch(users,
+                                                           posItems,
+                                                           negItems,
+                                                           batch_size=2048)):
+                ori_adj_sparse.requires_grad = True
+                bpr_loss, _ = baseline_.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
 
-                    gradient_bpr = torch.autograd.grad(bpr_loss, ori_adj_sparse, retain_graph=True)[0].to_dense()
-                    gradient_adj = gradient_adj + gradient_bpr
+                gradient_bpr = torch.autograd.grad(bpr_loss, ori_adj_sparse, retain_graph=True)[0].to_dense()
+                gradient_adj = gradient_adj + gradient_bpr
             # TODO: remove who? Largest or Smallest?
             gradient_adj = gradient_adj * adj_
             v, i = torch.topk(gradient_adj.flatten(), perturbations_, largest=largest)
