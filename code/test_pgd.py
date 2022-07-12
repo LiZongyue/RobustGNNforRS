@@ -205,7 +205,7 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
 
     groc_ = GROC_loss(Recmodel_, adj_, d_mtr_, adj_2_hops_, args_)
     if args.double_loss:
-        mode = 'GCLBPR'
+        mode = 'GCLBPR_largest_drop'
         if args.double_loss_baseline:
             baseline = None
         else:
@@ -236,8 +236,8 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
             else:
                 raise Exception("Baseline Model Unknown.")
 
-        adj_rm_1 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=False)
-        adj_rm_2 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=False)
+        adj_rm_1 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=True)
+        adj_rm_2 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=True)
     model_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
                   '/models/GROC_models/{}/{}_{}_{}_after_{}_{}_{}_{}_{}.ckpt'.format(args_.dataset, today_,
                                                                                        model_, dcl, bpr_gradient_, mode,
