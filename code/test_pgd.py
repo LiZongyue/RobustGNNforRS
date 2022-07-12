@@ -178,6 +178,7 @@ data_len = len(users)
 def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, adj_, Recmodel_, d_mtr_, today_,
                     bpr_gradient_, bpr_flag_, data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
                     negItems_val_):
+    mode = 'GROC'
     adj_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args_.dataset,
                                                                                                   model_)
     utils.insert_adj_construction_pipeline(adj_path_, model_, args_, device_, dataset_, num_users_, num_items_,
@@ -204,6 +205,7 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
 
     groc_ = GROC_loss(Recmodel_, adj_, d_mtr_, adj_2_hops_, args_)
     if args.double_loss:
+        mode = 'GCLBPR'
         if args.double_loss_baseline:
             baseline = None
         else:
@@ -237,13 +239,13 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
         adj_rm_1 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=False)
         adj_rm_2 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=False)
     model_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                  '/models/GROC_models/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args_.dataset, today_,
-                                                                                       model_, dcl, bpr_gradient_,
+                  '/models/GROC_models/{}/{}_{}_{}_after_{}_{}_{}_{}_{}.ckpt'.format(args_.dataset, today_,
+                                                                                       model_, dcl, bpr_gradient_, mode,
                                                                                        bpr_flag_, args_.loss_weight_bpr,
                                                                                        args_.batch_size)
     log_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
-                '/log/GROC_logs/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.log'.format(args_.dataset, today_, model_, dcl,
-                                                                               bpr_gradient_, bpr_flag_,
+                '/log/GROC_logs/{}/{}_{}_{}_after_{}_{}_{}_{}_{}.log'.format(args_.dataset, today_, model_, dcl,
+                                                                               bpr_gradient_, mode, bpr_flag_,
                                                                                args_.loss_weight_bpr, args_.batch_size)
     groc_.groc_train_with_bpr_sparse(data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
                                      negItems_val_, model_path_, log_path_, adj_rm_1=adj_rm_1, adj_rm_2=adj_rm_2,
