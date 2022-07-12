@@ -116,6 +116,7 @@ parser.add_argument('--prepare_adj_data', type=bool, default=False, help='BS.')
 parser.add_argument('--with_bpr', type=bool, default=False, help='Import baseline and train with bpr loss backwards.')
 parser.add_argument('--train_groc_pipeline', type=bool, default=False, help='GROC training')
 parser.add_argument('--double_loss_baseline', type=bool, default=False, help='CL for RS baseline ')
+parser.add_argument('--double_loss', type=bool, default=False, help='CL for RS double loss ')
 parser.add_argument('--baseline_single_loss', type=bool, default=False, help='baseline with one loss. DCL or BPR')
 parser.add_argument('--train_with_bpr_perturb', type=bool, default=False, help='GROC training controller. GCL_DCL training ')
 parser.add_argument('--with_bpr_gradient', type=bool, default=False,
@@ -147,6 +148,7 @@ else:
     adj = torch.load(ori_adj_path, map_location='cpu').to(device)
 # adj matrix only contains users and items
 perturbations = int(args.ptb_rate * (net.sum() // args.perturb_strength_list[args.modified_adj_id]))
+perturbations = int(args.ptb_rate * (net.sum()))
 
 rowsum = torch.tensor(net.sum(1)).to(device)
 r_inv = rowsum.pow(-1 / 2).flatten()
@@ -201,9 +203,39 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
     adj_rm_2 = None
 
     groc_ = GROC_loss(Recmodel_, adj_, d_mtr_, adj_2_hops_, args_)
-    if args.double_loss_baseline:
-        adj_rm_1 = groc_.attack_adjs(perturbations, 0.2, users, posItems, negItems)
-        adj_rm_2 = groc_.attack_adjs(perturbations, 0.2, users, posItems, negItems)
+    if args.double_loss:
+        if args.double_loss_baseline:
+            baseline = None
+        else:
+            local_path = os.path.abspath(os.path.dirname(os.getcwd()))
+            if model_ == 'NGCF':
+                path_ = local_path + '/models/{}/NGCF_baseline.ckpt'.format(args.dataset)
+                baseline = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=False)
+                baseline.load_state_dict(torch.load(path_))
+                baseline = baseline.to(device)
+
+            elif model_ == 'GCMC':
+                path_ = local_path + '/models/{}/GCMC_baseline.ckpt'.format(args.dataset)
+                baseline = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=False)
+                baseline.load_state_dict(torch.load(path_))
+                baseline = baseline.to(device)
+
+            elif model_ == 'GCCF':
+                path_ = local_path + '/models/{}/GCCF_baseline.ckpt'.format(args.dataset)
+                baseline = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=False)
+                baseline.load_state_dict(torch.load(path_))
+                baseline = baseline.to(device)
+
+            elif model_ == 'LightGCN':
+                path_ = local_path + '/models/{}/LightGCN_baseline.ckpt'.format(args.dataset)
+                baseline = lightgcn.LightGCN(device, num_users, num_items, use_dcl=False)
+                baseline.load_state_dict(torch.load(path_, map_location=torch.device('cpu')))
+                baseline = baseline.to(device)
+            else:
+                raise Exception("Baseline Model Unknown.")
+
+        adj_rm_1 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=False)
+        adj_rm_2 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=False)
     model_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
                   '/models/GROC_models/{}/{}_{}_{}_after_{}_GROC_{}_{}_{}.ckpt'.format(args_.dataset, today_,
                                                                                        model_, dcl, bpr_gradient_,
@@ -219,6 +251,64 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
 
     print("===========================")
     print("GROC training finished!")
+
+
+def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negItems_, device_, drop_only=True, largest=False):
+    """
+    perturbations: # of perturbated edges
+    rate: drop rate
+    """
+    baseline_.train()
+    gradient_adj = torch.zeros(adj_.size())
+    ori_adj_sparse = utils.normalize_adj_tensor(adj_).to_sparse()  # for bpr loss
+
+    adj_perturb = None
+    if drop_only:
+        if args.double_loss_baseline:
+            random_tensor = 1 - rate_
+            sparse_adj = adj_.to_sparse().to(device_)
+            random_tensor += torch.rand(sparse_adj._nnz()).to(device_)
+            dropout_mask = torch.floor(random_tensor).type(torch.bool)
+            i = sparse_adj._indices()
+            v = sparse_adj._values()
+
+            i = i[:, dropout_mask]
+            v = v[dropout_mask]
+
+            out = torch.sparse.FloatTensor(i, v, adj_.shape).to(device_)
+            adj_perturb = (out * (1. / (1 - rate_))).to_dense().to(device_)
+        else:
+            users = users_.to(device_)
+            posItems = posItems_.to(device_)
+            negItems = negItems_.to(device_)
+            users, posItems, negItems = utils.shuffle(users, posItems, negItems)
+
+            for i in range(1):
+                baseline_.train()
+                for (batch_i,
+                     (batch_users,
+                      batch_pos,
+                      batch_neg)) in enumerate(utils.minibatch(users,
+                                                               posItems,
+                                                               negItems,
+                                                               batch_size=2048)):
+                    ori_adj_sparse.requires_grad = True
+                    bpr_loss, _ = baseline_.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
+
+                    gradient_bpr = torch.autograd.grad(bpr_loss, ori_adj_sparse, retain_graph=True)[0].to_dense()
+                    gradient_adj = gradient_adj + gradient_bpr
+            # TODO: remove who? Largest or Smallest?
+            gradient_adj = gradient_adj * adj_
+            v, i = torch.topk(gradient_adj.flatten(), perturbations_, largest=largest)
+            ind_rm = torch.tensor(np.array(np.unravel_index(i.numpy(), gradient_adj.shape)).T).reshape(2, -1).to(device_)
+            m = (torch.rand(perturbations_) > 0.6).to(device_)  # 0.4 * 0.5 = 0.2 drop
+            ind_rm = ind_rm[:, m]
+            val_rm = torch.ones(ind_rm.shape[1]).to(device_)
+
+            out = torch.sparse.FloatTensor(ind_rm, val_rm, adj_.shape).to(device_)
+            adj_perturb = (out * (1. / (1 - rate_))).to_dense().to(device_)
+
+    return adj_perturb
 
 
 if args.train_baseline:
@@ -249,7 +339,7 @@ if args.train_baseline:
             model = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
                            args.dataset)
-    elif args.double_loss_baseline:
+    elif args.double_loss:
         adj = adj.to_dense().to(device)
         bpr_gradient = 'baseline'
         bpr_flag = 'double_loss'

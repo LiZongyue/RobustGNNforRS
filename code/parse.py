@@ -80,6 +80,7 @@ def parse_args():
     parser.add_argument('--train_groc_pipeline', type=bool, default=False, help='GROC training')
     parser.add_argument('--double_loss_baseline', type=bool, default=False,
                         help='GROC training. When False, GCL_DCL training ')
+    parser.add_argument('--double_loss', type=bool, default=False, help='CL for RS double loss ')
     parser.add_argument('--train_with_bpr_perturb', type=bool, default=False,
                         help='GROC training controller. GCL_DCL training ')
     parser.add_argument('--with_bpr_gradient', type=bool, default=False,
