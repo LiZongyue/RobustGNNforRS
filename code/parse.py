@@ -12,6 +12,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Go lightGCN")
     parser.add_argument('--bpr_batch', type=int, default=2048,
                         help="the batch size for bpr loss training procedure")
+    parser.add_argument('--groc_batch_size', type=int, default=128, help='BS.')
     parser.add_argument('--recdim', type=int, default=64,
                         help="the embedding size of lightGCN")
     parser.add_argument('--layer', type=int, default=3,
@@ -83,6 +84,7 @@ def parse_args():
     parser.add_argument('--double_loss', type=bool, default=False, help='CL for RS double loss ')
     parser.add_argument('--train_with_bpr_perturb', type=bool, default=False,
                         help='GROC training controller. GCL_DCL training ')
+    parser.add_argument('--only_user_groc', type=bool, default=False, help='GROC training anchor node only from users ')
     parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                         help='GROC adj insert/remove with bpr gradient signals.')
 

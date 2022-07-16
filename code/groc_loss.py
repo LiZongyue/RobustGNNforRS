@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils import scheduler_groc
+import numpy as np
 from utils_attack import attack_model
 import utils
 import torch.nn.functional as F
@@ -92,7 +93,7 @@ class GROC_loss(nn.Module):
         else:
             num_insert = torch.sum(where_to_insert)
 
-        where_to_insert = where_to_insert + where_to_insert.t()
+        # where_to_insert = where_to_insert + where_to_insert.t()
 
         adj_with_insert = self.ori_adj + where_to_insert / num_insert
 
@@ -133,7 +134,7 @@ class GROC_loss(nn.Module):
 
         return adj_insert_remove
 
-    def get_modified_adj_with_insert_and_remove_by_gradient(self, remove_prob, insert_prob, batch_users_unique,
+    def get_modified_adj_with_insert_and_remove_by_gradient(self, insert_prob, remove_prob, batch_users_unique,
                                                             edge_gradient, adj_with_insert, tril_adj_index_0,
                                                             tril_adj_index_1, num_insert):
         i = torch.stack((batch_users_unique, batch_users_unique))
@@ -146,35 +147,47 @@ class GROC_loss(nn.Module):
         k_insert = int(insert_prob * num_insert)
 
         edge_gradient = edge_gradient.to_dense().to(self.device)
-        edge_gradient_remove = \
-            (self.ori_adj * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient))[tril_adj_index_1, tril_adj_index_0]
+        edge_gradient_remove = self.ori_adj * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient)
+        _, i = torch.topk(edge_gradient_remove.flatten(), k_remove, largest=False)
+        indices_rm = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), self.ori_adj.shape)).T).reshape(2, -1).to(self.device)
 
-        _, indices_rm = torch.topk(edge_gradient_remove, k_remove, largest=False)
+        adj_insert_remove[indices_rm] = 0.
 
-        low_tril_matrix = adj_insert_remove[tril_adj_index_0, tril_adj_index_1]
-        up_tril_matrix = adj_insert_remove[tril_adj_index_1, tril_adj_index_0]
-        low_tril_matrix[indices_rm] = 0.
-        up_tril_matrix[indices_rm] = 0.
+        edge_gradient_insert = (1 - self.ori_adj) * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient)
+        _, i = torch.topk(edge_gradient_insert.flatten(), k_insert)
+        indices_ir = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), self.ori_adj.shape)).T).reshape(2, -1).to(self.device)
 
-        # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
-        edge_gradient_insert = (edge_gradient *
-                                (adj_with_insert - self.ori_adj))[tril_adj_index_0, tril_adj_index_1]
-        _, indices_ir = torch.topk(edge_gradient_insert, k_insert)
-        low_tril_matrix[indices_ir] = 1.
-        up_tril_matrix[indices_ir] = 1.
+        adj_insert_remove[indices_ir] = 1.
 
-        adj_insert_remove[tril_adj_index_0, tril_adj_index_1] = low_tril_matrix
-        adj_insert_remove[tril_adj_index_1, tril_adj_index_0] = up_tril_matrix
-
-        del low_tril_matrix
-        del up_tril_matrix
-
-        del edge_gradient
-        del edge_gradient_insert
-        del edge_gradient_remove
-
-        gc.collect()
-
+        # edge_gradient_remove = \
+        #     (self.ori_adj * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient))[tril_adj_index_1, tril_adj_index_0]
+        #
+        # _, indices_rm = torch.topk(edge_gradient_remove, k_remove, largest=False)
+        #
+        # low_tril_matrix = adj_insert_remove[tril_adj_index_0, tril_adj_index_1]
+        # up_tril_matrix = adj_insert_remove[tril_adj_index_1, tril_adj_index_0]
+        # low_tril_matrix[indices_rm] = 0.
+        # up_tril_matrix[indices_rm] = 0.
+        #
+        # # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
+        # edge_gradient_insert = (edge_gradient *
+        #                         (adj_with_insert - self.ori_adj))[tril_adj_index_0, tril_adj_index_1]
+        # _, indices_ir = torch.topk(edge_gradient_insert, k_insert)
+        # low_tril_matrix[indices_ir] = 1.
+        # up_tril_matrix[indices_ir] = 1.
+        #
+        # adj_insert_remove[tril_adj_index_0, tril_adj_index_1] = low_tril_matrix
+        # adj_insert_remove[tril_adj_index_1, tril_adj_index_0] = up_tril_matrix
+        #
+        # del low_tril_matrix
+        # del up_tril_matrix
+        #
+        # del edge_gradient
+        # del edge_gradient_insert
+        # del edge_gradient_remove
+        #
+        # gc.collect()
+        #
         return adj_insert_remove
 
     @staticmethod
@@ -388,7 +401,13 @@ class GROC_loss(nn.Module):
 
     def forward_pass_groc_with_bpr(self, batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse, val=False):
         self.ori_model.requires_grad_(True)
-        batch_users_unique = batch_users.unique()  # only select 10 anchor nodes for adj_edge insertion
+        idx_num = self.args.groc_batch_size
+        if self.args.only_user_groc:
+            batch_users_unique = batch_users.unique()
+            # batch_users_unique = self.data_selection_groc(batch_users_unique, idx_num)
+        else:
+            batch_users_unique = torch.cat((batch_users.unique(), batch_pos.unique()), 0)
+            batch_users_unique = self.data_selection_groc(batch_users_unique, idx_num)
 
         # perturb adj inside training. Insert value (1 / num_inserted) to ori_adj. Where to insert, check GROC
 
@@ -410,9 +429,8 @@ class GROC_loss(nn.Module):
             if model_name in ['NGCF', 'GCMC']:
                 bpr_loss, reg_loss = self.ori_model.bpr_loss(adj_for_loss_gradient, batch_users, batch_pos, batch_neg, adj_drop_out=True)
             else:
-                bpr_loss, reg_loss = self.ori_model.bpr_loss(adj_for_loss_gradient, batch_users, batch_pos, batch_neg)
-            reg_loss = reg_loss * self.ori_model.weight_decay
-            loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * loss_for_grad
+                bpr_loss, _ = self.ori_model.bpr_loss(adj_for_loss_gradient, batch_users, batch_pos, batch_neg)
+            loss = self.args.loss_weight_bpr * bpr_loss + (1 - self.args.loss_weight_bpr) * loss_for_grad
 
             edge_gradient = torch.autograd.grad(loss, adj_for_loss_gradient, retain_graph=True)[0]
         else:
@@ -483,6 +501,14 @@ class GROC_loss(nn.Module):
         loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
 
         return loss, bpr_loss, groc_loss
+
+    def data_selection_groc(self, batch_users_unique, idx_num):
+        if self.args.groc_batch_size < len(batch_users_unique):
+            idx_num = len(batch_users_unique)
+        selection_id = torch.randint(0, len(batch_users_unique), (idx_num,)).to(self.device)
+        batch_users_unique = batch_users_unique[selection_id]  # only select idx_num anchor nodes for adj_edge insertion3
+
+        return batch_users_unique
 
     def fit(self):
         pass
