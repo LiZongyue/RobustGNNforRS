@@ -87,5 +87,9 @@ def parse_args():
     parser.add_argument('--only_user_groc', type=bool, default=False, help='GROC training anchor node only from users ')
     parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                         help='GROC adj insert/remove with bpr gradient signals.')
+    parser.add_argument('--insert_prob_1', type=float, default=0.4, help='mask embedding of users/items of GCN')
+    parser.add_argument('--insert_prob_2', type=float, default=0.4, help='mask embedding of users/items of GCN')
+    parser.add_argument('--remove_prob_1', type=float, default=0.2, help='mask embedding of users/items of GCN')
+    parser.add_argument('--remove_prob_2', type=float, default=0.4, help='mask embedding of users/items of GCN')
 
     return parser.parse_args()
