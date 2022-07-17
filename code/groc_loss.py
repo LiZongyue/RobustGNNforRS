@@ -404,7 +404,7 @@ class GROC_loss(nn.Module):
         idx_num = self.args.groc_batch_size
         if self.args.only_user_groc:
             batch_users_unique = batch_users.unique()
-            # batch_users_unique = self.data_selection_groc(batch_users_unique, idx_num)
+            batch_users_unique = self.data_selection_groc(batch_users_unique, idx_num)
         else:
             batch_users_unique = torch.cat((batch_users.unique(), batch_pos.unique()), 0)
             batch_users_unique = self.data_selection_groc(batch_users_unique, idx_num)
