@@ -93,7 +93,7 @@ class GROC_loss(nn.Module):
         else:
             num_insert = torch.sum(where_to_insert)
 
-        # where_to_insert = where_to_insert + where_to_insert.t()
+        where_to_insert = where_to_insert + where_to_insert.t()
 
         adj_with_insert = self.ori_adj + where_to_insert / num_insert
 
@@ -148,45 +148,45 @@ class GROC_loss(nn.Module):
 
         edge_gradient = edge_gradient.to_dense().to(self.device)
         edge_gradient_remove = self.ori_adj * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient)
-        _, i = torch.topk(edge_gradient_remove.flatten(), k_remove, largest=False)
-        indices_rm = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), self.ori_adj.shape)).T).reshape(2, -1).to(self.device)
+        # _, i = torch.topk(edge_gradient_remove.flatten(), k_remove, largest=False)
+        # indices_rm = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), self.ori_adj.shape)).T).reshape(2, -1).to(self.device)
+        #
+        # adj_insert_remove[indices_rm] = 0.
+        #
+        # edge_gradient_insert = (1 - self.ori_adj) * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient)
+        # _, i = torch.topk(edge_gradient_insert.flatten(), k_insert)
+        # indices_ir = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), self.ori_adj.shape)).T).reshape(2, -1).to(self.device)
+        #
+        # adj_insert_remove[indices_ir] = 1.
 
-        adj_insert_remove[indices_rm] = 0.
+        edge_gradient_remove = \
+            (self.ori_adj * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient))[tril_adj_index_1, tril_adj_index_0]
 
-        edge_gradient_insert = (1 - self.ori_adj) * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient)
-        _, i = torch.topk(edge_gradient_insert.flatten(), k_insert)
-        indices_ir = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), self.ori_adj.shape)).T).reshape(2, -1).to(self.device)
+        _, indices_rm = torch.topk(edge_gradient_remove, k_remove, largest=False)
 
-        adj_insert_remove[indices_ir] = 1.
+        low_tril_matrix = adj_insert_remove[tril_adj_index_0, tril_adj_index_1]
+        up_tril_matrix = adj_insert_remove[tril_adj_index_1, tril_adj_index_0]
+        low_tril_matrix[indices_rm] = 0.
+        up_tril_matrix[indices_rm] = 0.
 
-        # edge_gradient_remove = \
-        #     (self.ori_adj * torch.sparse.mm(batch_nodes_in_matrix, edge_gradient))[tril_adj_index_1, tril_adj_index_0]
-        #
-        # _, indices_rm = torch.topk(edge_gradient_remove, k_remove, largest=False)
-        #
-        # low_tril_matrix = adj_insert_remove[tril_adj_index_0, tril_adj_index_1]
-        # up_tril_matrix = adj_insert_remove[tril_adj_index_1, tril_adj_index_0]
-        # low_tril_matrix[indices_rm] = 0.
-        # up_tril_matrix[indices_rm] = 0.
-        #
-        # # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
-        # edge_gradient_insert = (edge_gradient *
-        #                         (adj_with_insert - self.ori_adj))[tril_adj_index_0, tril_adj_index_1]
-        # _, indices_ir = torch.topk(edge_gradient_insert, k_insert)
-        # low_tril_matrix[indices_ir] = 1.
-        # up_tril_matrix[indices_ir] = 1.
-        #
-        # adj_insert_remove[tril_adj_index_0, tril_adj_index_1] = low_tril_matrix
-        # adj_insert_remove[tril_adj_index_1, tril_adj_index_0] = up_tril_matrix
-        #
-        # del low_tril_matrix
-        # del up_tril_matrix
-        #
-        # del edge_gradient
-        # del edge_gradient_insert
-        # del edge_gradient_remove
-        #
-        # gc.collect()
+        # k_insert = int(insert_prob * len(batch_users_unique) * (len(batch_users_unique) - 1) / 2)
+        edge_gradient_insert = (edge_gradient *
+                                (adj_with_insert - self.ori_adj))[tril_adj_index_0, tril_adj_index_1]
+        _, indices_ir = torch.topk(edge_gradient_insert, k_insert)
+        low_tril_matrix[indices_ir] = 1.
+        up_tril_matrix[indices_ir] = 1.
+
+        adj_insert_remove[tril_adj_index_0, tril_adj_index_1] = low_tril_matrix
+        adj_insert_remove[tril_adj_index_1, tril_adj_index_0] = up_tril_matrix
+
+        del low_tril_matrix
+        del up_tril_matrix
+
+        del edge_gradient
+        del edge_gradient_insert
+        del edge_gradient_remove
+
+        gc.collect()
         #
         return adj_insert_remove
 
