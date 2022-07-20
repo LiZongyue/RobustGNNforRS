@@ -308,7 +308,7 @@ class GROC_loss(nn.Module):
                 val_aver_loss = val_aver_loss / total_val_batch
                 val_aver_bpr_loss = val_aver_bpr_loss / total_val_batch
                 val_aver_groc_loss = val_aver_groc_loss / total_val_batch
-                recall = Procedure.val_recall(users_val, val_dict, dataset, self.ori_model, self.ori_adj)
+                recall = Procedure.val_recall(users_val.cpu(), val_dict, dataset, self.ori_model, self.ori_adj)
                 if i % 10 == 0:
                     save = True
                 else:
