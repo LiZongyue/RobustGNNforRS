@@ -325,7 +325,7 @@ class GROC_loss(nn.Module):
 
                 if save:
                     str_list = list(checkpoint_file_name)
-                    str_list.insert(-5, i)
+                    str_list.insert(-5, str(i))
                     checkpoint_file_name = ''.join(str_list)
                     utils.save_model(self.ori_model, checkpoint_file_name)
 
