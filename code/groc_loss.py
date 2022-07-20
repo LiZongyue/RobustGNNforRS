@@ -287,40 +287,40 @@ class GROC_loss(nn.Module):
                     print('Starting validation')
                     eval_log.append("Valid Epoch: {}:".format(i))
                     users_val = users_val.to(self.device)
-                    # for (batch_i, (batch_users, batch_pos, batch_neg)) \
-                    #         in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
-                    #     if self.args.train_groc_pipeline:
-                    #         val_loss, val_bpr_loss, val_dcl_loss = \
-                    #             self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse)
-                    #     elif self.args.train_with_bpr_perturb:  # perturb adj with bpr gradient, train as CL for RS
-                    #         val_loss, val_bpr_loss, val_dcl_loss = \
-                    #             self.clrs_train_with_gradient_perturb_one_batch(adj_rm_1, adj_rm_2, batch_users, batch_pos,
-                    #                                                             batch_neg, ori_adj_sparse, optimizer, scheduler,
-                    #                                                             sparse, True)
-                    #     else:
-                    #         raise Exception("No validation process is running.")
-                    #
-                    #     val_aver_loss += val_loss.cpu().item()
-                    #     val_aver_bpr_loss += val_bpr_loss.cpu().item()
-                    #     val_aver_groc_loss += val_dcl_loss.cpu().item()
-                    #
-                    # val_aver_loss = val_aver_loss / total_val_batch
-                    # val_aver_bpr_loss = val_aver_bpr_loss / total_val_batch
-                    # val_aver_groc_loss = val_aver_groc_loss / total_val_batch
+                    for (batch_i, (batch_users, batch_pos, batch_neg)) \
+                            in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
+                        if self.args.train_groc_pipeline:
+                            val_loss, val_bpr_loss, val_dcl_loss = \
+                                self.groc_val_with_bpr_one_batch(batch_users, batch_pos, batch_neg, ori_adj_sparse, tril_adj_index_0, tril_adj_index_1, sparse)
+                        elif self.args.train_with_bpr_perturb:  # perturb adj with bpr gradient, train as CL for RS
+                            val_loss, val_bpr_loss, val_dcl_loss = \
+                                self.clrs_train_with_gradient_perturb_one_batch(adj_rm_1, adj_rm_2, batch_users, batch_pos,
+                                                                                batch_neg, ori_adj_sparse, optimizer, scheduler,
+                                                                                sparse, True)
+                        else:
+                            raise Exception("No validation process is running.")
+
+                        val_aver_loss += val_loss.cpu().item()
+                        val_aver_bpr_loss += val_bpr_loss.cpu().item()
+                        val_aver_groc_loss += val_dcl_loss.cpu().item()
+
+                    val_aver_loss = val_aver_loss / total_val_batch
+                    val_aver_bpr_loss = val_aver_bpr_loss / total_val_batch
+                    val_aver_groc_loss = val_aver_groc_loss / total_val_batch
                     recall = Procedure.val_recall(users_val, val_dict, dataset, self.ori_model, self.ori_adj)
                     if i % 10 == 0:
                         save = True
                     else:
                         save = False
-                    # if val_max_loss > val_aver_loss:
-                    #     save = True
-                    #     eval_log.append(f'Valid loss score decreased from {val_max_loss} to {val_aver_loss}')
-                    #     eval_log.append(f'Valid bpr loss score decreased from {val_max_bpr_loss} to {val_aver_bpr_loss}')
-                    #     eval_log.append(f'Valid loss score decreased from {val_max_groc_loss} to {val_aver_groc_loss}')
-                    #
-                    #     val_max_groc_loss = val_aver_groc_loss
-                    #     val_max_loss = val_aver_loss
-                    #     val_max_bpr_loss = val_aver_bpr_loss
+                    if val_max_loss > val_aver_loss:
+                        # save = True
+                        eval_log.append(f'Valid loss score decreased from {val_max_loss} to {val_aver_loss}')
+                        eval_log.append(f'Valid bpr loss score decreased from {val_max_bpr_loss} to {val_aver_bpr_loss}')
+                        eval_log.append(f'Valid loss score decreased from {val_max_groc_loss} to {val_aver_groc_loss}')
+
+                        val_max_groc_loss = val_aver_groc_loss
+                        val_max_loss = val_aver_loss
+                        val_max_bpr_loss = val_aver_bpr_loss
 
                     if save:
                         str_list = list(checkpoint_file_name)
@@ -334,9 +334,9 @@ class GROC_loss(nn.Module):
                     eval_log.append("Current Time = {}".format(current_time))
                     eval_log.append("=======================")
                     eval_log.append("Recall@20: {}:".format(recall))
-                    # eval_log.append("Valid total Loss: {}".format(val_aver_loss))
-                    # eval_log.append("Valid BPR Loss: {}".format(val_aver_bpr_loss))
-                    # eval_log.append("Valid GROC Loss: {}".format(val_aver_groc_loss))
+                    eval_log.append("Valid total Loss: {}".format(val_aver_loss))
+                    eval_log.append("Valid BPR Loss: {}".format(val_aver_bpr_loss))
+                    eval_log.append("Valid GROC Loss: {}".format(val_aver_groc_loss))
                     eval_log.append("=========================")
 
                     utils.append_log_to_file(eval_log, i, log_file_name)
