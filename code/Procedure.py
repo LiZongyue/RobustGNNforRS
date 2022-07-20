@@ -10,13 +10,7 @@ import world
 import numpy as np
 import torch
 import utils
-import dataloader
-from pprint import pprint
-from time import time
-from tqdm import tqdm
-import model
 import multiprocessing
-from sklearn.metrics import roc_auc_score
 
 CORES = multiprocessing.cpu_count() // 2
 
@@ -144,6 +138,61 @@ def Test(dataset, Recmodel, epoch, adj, w=None, multicore=0):
                           {str(world.topks[i]): results['precision'][i] for i in range(len(world.topks))}, epoch)
             w.add_scalars(f'Test/NDCG@{world.topks}',
                           {str(world.topks[i]): results['ndcg'][i] for i in range(len(world.topks))}, epoch)
+        if multicore == 1:
+            pool.close()
+        print(results)
+        return results
+
+
+def val_recall(users, val_dict, dataset, model, adj, multicore=0):
+    u_batch_size = 2048
+    # eval mode with no dropout
+    model = model.eval()
+    max_K = max(world.topks)
+    if multicore == 1:
+        pool = multiprocessing.Pool(CORES)
+    results = np.zeros(len(world.topks))
+    with torch.no_grad():
+        try:
+            assert u_batch_size <= len(users) / 10
+        except AssertionError:
+            print(f"val_u_batch_size is too big for this dataset, try a small one {len(users) // 10}")
+        users_list = []
+        rating_list = []
+        groundTrue_list = []
+        # ratings = []
+        # total_batch = len(users) // u_batch_size + 1
+        for batch_users in utils.minibatch(users, batch_size=u_batch_size):
+            allPos = dataset.getUserPosItems(batch_users)
+            groundTrue = [val_dict[u.item()] for u in batch_users]
+            batch_users_gpu = batch_users.to(world.device)
+
+            rating = model.getUsersRating(adj, batch_users_gpu)
+
+            exclude_index = []
+            exclude_items = []
+            for range_i, items in enumerate(allPos):
+                exclude_index.extend([range_i] * len(items))
+                exclude_items.extend(items)
+            rating[exclude_index, exclude_items] = -(1 << 10)
+            _, rating_K = torch.topk(rating, k=max_K)
+
+            users_list.append(batch_users)
+            rating_list.append(rating_K.cpu())
+            groundTrue_list.append(groundTrue)
+        # assert total_batch == len(users_list)
+        X = zip(rating_list, groundTrue_list)
+        if multicore == 1:
+            pre_results = pool.map(test_one_batch, X)
+        else:
+            pre_results = []
+            for x in X:
+                pre_results.append(test_one_batch(x))
+        for result in pre_results:
+            results += result['recall']
+
+        results /= float(len(users))
+
         if multicore == 1:
             pool.close()
         print(results)

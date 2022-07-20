@@ -167,7 +167,17 @@ d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
 
 # load training data (ID)
 users, posItems, negItems = utils.getTrainSet(dataset)
-users_val, posItems_val, negItems_val = utils.getTestSet(dataset)
+num_valid = int(0.1 * len(users))
+users_val = users[:num_valid]
+posItems_val = posItems[:num_valid]
+negItems_val = negItems[:num_valid]
+val_dict = {}
+for i, user in enumerate(users_val):
+    if val_dict.get(user.item()):
+        val_dict[user.item()].append(posItems_val[i].item())
+    else:
+        val_dict[user.item()] = [posItems_val[i].item()]
+
 # comment for GPU code, only for debugging
 # users = users[:2048]
 # posItems = posItems[:2048]
@@ -315,10 +325,10 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
 
 if args.train_baseline:
     def train_baseline(baseline, ori_adj_tensor, degree_mtx, all_users, pos_items_pair, neg_items_sample, all_users_val,
-                       pos_items_pair_val, neg_items_sample_val, dataset_):
+                       val_dict_, dataset_):
         baseline = baseline.to(device)
         baseline.fit(ori_adj_tensor, degree_mtx, all_users, pos_items_pair, neg_items_sample, all_users_val,
-                     pos_items_pair_val, neg_items_sample_val, dataset_)
+                     val_dict_, dataset_, dataset)
 
     if args.baseline_single_loss:
         if args.model_ngcf:
@@ -334,8 +344,7 @@ if args.train_baseline:
         if args.model_lightgcn:
             print("LightGCN Baseline Model Calibration.")
             model = lightgcn.LightGCN(device, num_users, num_items, use_dcl=args.use_dcl)
-            train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, posItems_val, negItems_val,
-                           args.dataset)
+            train_baseline(model, adj, d_mtr, users, posItems, negItems, users_val, val_dict, args.dataset)
         if args.model_gccf:
             print("LR-GCCF Baseline Model Calibration.")
             model = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
