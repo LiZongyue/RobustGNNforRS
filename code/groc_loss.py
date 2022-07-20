@@ -228,7 +228,7 @@ class GROC_loss(nn.Module):
         total_batch = len(users) // self.args.batch_size + 1
         total_val_batch = len(users_val) // self.args.val_batch_size + 1
         ori_adj_sparse = utils.normalize_adj_tensor(self.ori_adj).to_sparse()  # for bpr loss
-        # val_max_loss, val_max_bpr_loss, val_max_groc_loss = float('Inf'), float('Inf'), float('Inf')
+        val_max_loss, val_max_bpr_loss, val_max_groc_loss = float('Inf'), float('Inf'), float('Inf')
         tril_adj_index = torch.tril_indices(row=len(self.ori_adj), col=len(self.ori_adj), offset=0)
         tril_adj_index = tril_adj_index.to(self.device)
         tril_adj_index_0 = tril_adj_index[0]
