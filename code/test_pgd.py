@@ -167,6 +167,7 @@ d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
 
 # load training data (ID)
 users, posItems, negItems = utils.getTrainSet(dataset)
+users, posItems, negItems = utils.shuffle(users, posItems, negItems)
 num_valid = int(0.1 * len(users))
 users_val = users[:num_valid]
 posItems_val = posItems[:num_valid]

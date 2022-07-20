@@ -239,10 +239,10 @@ class GROC_loss(nn.Module):
             users = users.to(self.device)
             posItems = posItems.to(self.device)
             negItems = negItems.to(self.device)
-            users, posItems, negItems = utils.shuffle(users, posItems, negItems)
+            # users, posItems, negItems = utils.shuffle(users, posItems, negItems)
 
             aver_loss, aver_bpr_loss, aver_groc_loss = 0., 0., 0.
-            # val_aver_loss, val_aver_bpr_loss, val_aver_groc_loss = 0., 0., 0.
+            val_aver_loss, val_aver_bpr_loss, val_aver_groc_loss = 0., 0., 0.
 
             for (batch_i, (batch_users, batch_pos, batch_neg)) \
                     in enumerate(utils.minibatch(users, posItems, negItems, batch_size=self.args.batch_size)):
@@ -287,6 +287,8 @@ class GROC_loss(nn.Module):
                     print('Starting validation')
                     eval_log.append("Valid Epoch: {}:".format(i))
                     users_val = users_val.to(self.device)
+                    posItems_val = posItems_val.to(self.device)
+                    negItems_val = negItems_val.to(self.device)
                     for (batch_i, (batch_users, batch_pos, batch_neg)) \
                             in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
                         if self.args.train_groc_pipeline:
