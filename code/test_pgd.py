@@ -188,7 +188,7 @@ data_len = len(users)
 
 def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, adj_, Recmodel_, d_mtr_, today_,
                     bpr_gradient_, bpr_flag_, data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
-                    negItems_val_):
+                    negItems_val_, val_dict_):
     mode = 'GROC'
     adj_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + '/adj/{}/{}_adj_2_hops.pt'.format(args_.dataset,
                                                                                                   model_)
@@ -259,7 +259,7 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
                                                                                bpr_gradient_, mode, bpr_flag_,
                                                                                args_.loss_weight_bpr, args_.batch_size)
     groc_.groc_train_with_bpr_sparse(data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
-                                     negItems_val_, model_path_, log_path_, adj_rm_1=adj_rm_1, adj_rm_2=adj_rm_2,
+                                     negItems_val_, val_dict_, model_path_, log_path_, adj_rm_1=adj_rm_1, adj_rm_2=adj_rm_2,
                                      sparse=False)
 
     print("===========================")
@@ -366,7 +366,7 @@ if args.train_baseline:
             model = 'LightGCN'
             Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, val_dict)
 
         if args.model_gccf:
             print("GCCF Baseline Model with double Loss Calibration.")
@@ -400,7 +400,7 @@ if args.train_groc:
             Recmodel.load_state_dict(torch.load(path))
             bpr_flag = 'without_BPR'
         train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today, bpr_gradient,
-                        bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+                        bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, val_dict)
 
     if args.model_lightgcn:
         adj = adj.to_dense().to(device)
@@ -421,7 +421,7 @@ if args.train_groc:
 
             bpr_flag = 'without_BPR'
         train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today, bpr_gradient,
-                        bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val)
+                        bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val, negItems_val, val_dict)
 
     if args.model_gcmc:
         adj = adj.to_dense().to(device)
