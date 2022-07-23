@@ -169,9 +169,16 @@ d_mtr = torch.sparse_coo_tensor(i_d, v_d, torch.Size(shape)).to(device)
 users, posItems, negItems = utils.getTrainSet(dataset)
 users, posItems, negItems = utils.shuffle(users, posItems, negItems)
 num_valid = int(0.1 * len(users))
+
+# Split data into Training set and Validation Set
+users = users[num_valid:]
+posItems = posItems[num_valid:]
+negItems = negItems[num_valid:]
 users_val = users[:num_valid]
 posItems_val = posItems[:num_valid]
 negItems_val = negItems[:num_valid]
+
+# Construct Validation Dict
 val_dict = {}
 for i, user in enumerate(users_val):
     if val_dict.get(user.item()):

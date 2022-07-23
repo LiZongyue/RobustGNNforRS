@@ -63,10 +63,11 @@ def test_one_batch(X):
             'ndcg': np.array(ndcg)}
 
 
-def Test(dataset, Recmodel, epoch, adj, w=None, multicore=0):
+def Test(dataset, Recmodel, epoch, adj, w=None, multicore=0, testDict=None, val=False):
     u_batch_size = world.config['test_u_batch_size']
     # dataset: utils.BasicDataset
-    testDict: dict = dataset.testDict
+    if testDict is None:
+        testDict: dict = dataset.testDict
     # Recmodel: model.LightGCN
     # eval mode with no dropout
     Recmodel = Recmodel.eval()
@@ -104,12 +105,13 @@ def Test(dataset, Recmodel, epoch, adj, w=None, multicore=0):
             rating[exclude_index, exclude_items] = -(1 << 10)
             _, rating_K = torch.topk(rating, k=max_K)
             rating = rating.cpu().numpy()
-            aucs = [
-                utils.AUC(rating[i],
-                          dataset,
-                          test_data) for i, test_data in enumerate(groundTrue)
-            ]
-            auc_record.extend(aucs)
+            if not val:
+                aucs = [
+                    utils.AUC(rating[i],
+                              dataset,
+                              test_data) for i, test_data in enumerate(groundTrue)
+                ]
+                auc_record.extend(aucs)
             del rating
             users_list.append(batch_users)
             rating_list.append(rating_K.cpu())
@@ -130,7 +132,8 @@ def Test(dataset, Recmodel, epoch, adj, w=None, multicore=0):
         results['recall'] /= float(len(users))
         results['precision'] /= float(len(users))
         results['ndcg'] /= float(len(users))
-        results['auc'] = np.mean(auc_record)
+        if not val:
+            results['auc'] = np.mean(auc_record)
         if world.tensorboard:
             w.add_scalars(f'Test/Recall@{world.topks}',
                           {str(world.topks[i]): results['recall'][i] for i in range(len(world.topks))}, epoch)
@@ -153,6 +156,7 @@ def val_recall(users, val_dict, dataset, model, adj, multicore=0):
         pool = multiprocessing.Pool(CORES)
     results = np.zeros(len(world.topks))
     with torch.no_grad():
+        users = list(val_dict.keys())
         try:
             assert u_batch_size <= len(users) / 10
         except AssertionError:
@@ -166,7 +170,6 @@ def val_recall(users, val_dict, dataset, model, adj, multicore=0):
             allPos = dataset.getUserPosItems(batch_users)
             groundTrue = [val_dict[u.item()] for u in batch_users]
             batch_users_gpu = batch_users.to(world.device)
-
             rating = model.getUsersRating(adj, batch_users_gpu)
 
             exclude_index = []

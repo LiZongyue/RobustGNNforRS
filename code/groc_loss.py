@@ -233,13 +233,19 @@ class GROC_loss(nn.Module):
         tril_adj_index = tril_adj_index.to(self.device)
         tril_adj_index_0 = tril_adj_index[0]
         tril_adj_index_1 = tril_adj_index[1]
+
+        # Data to device
+        users = users.to(self.device)
+        posItems = posItems.to(self.device)
+        negItems = negItems.to(self.device)
+        users_val = users_val.to(self.device)
+        posItems_val = posItems_val.to(self.device)
+        negItems_val = negItems_val.to(self.device)
+
         for i in range(self.args.groc_epochs):
             eval_log = []
             optimizer.zero_grad()
-            users = users.to(self.device)
-            posItems = posItems.to(self.device)
-            negItems = negItems.to(self.device)
-            # users, posItems, negItems = utils.shuffle(users, posItems, negItems)
+            users, posItems, negItems = utils.shuffle(users, posItems, negItems)
 
             aver_loss, aver_bpr_loss, aver_groc_loss = 0., 0., 0.
             val_aver_loss, val_aver_bpr_loss, val_aver_groc_loss = 0., 0., 0.
@@ -285,9 +291,7 @@ class GROC_loss(nn.Module):
             if (i + 1) % self.args.valid_freq == 0:
                 print('Starting validation')
                 eval_log.append("Valid Epoch: {}:".format(i))
-                users_val = users_val.to(self.device)
-                posItems_val = posItems_val.to(self.device)
-                negItems_val = negItems_val.to(self.device)
+
                 for (batch_i, (batch_users, batch_pos, batch_neg)) \
                         in enumerate(utils.minibatch(users_val, posItems_val, negItems_val, batch_size=self.args.val_batch_size)):
                     if self.args.train_groc_pipeline:
@@ -326,8 +330,8 @@ class GROC_loss(nn.Module):
                 if save:
                     str_list = list(checkpoint_file_name)
                     str_list.insert(-5, str(i))
-                    checkpoint_file_name = ''.join(str_list)
-                    utils.save_model(self.ori_model, checkpoint_file_name)
+                    checkpoint_name = ''.join(str_list)
+                    utils.save_model(self.ori_model, checkpoint_name)
 
                 now = datetime.now()
 

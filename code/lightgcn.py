@@ -66,12 +66,7 @@ class LightGCN(nn.Module):
         rating = self.f(torch.matmul(users_emb, items_emb.t()))
         return rating
 
-    def mask_embedding(self, embed, mask):
-        mask = embed.weight.data.new_empty((embed.weight.size(0), 1)).bernoulli_(1 - mask).expand_as(embed.weight) / (1 - mask)
-        masked_embed_weight = mask * embed.weight
-        return torch.nn.functional.embedding(masked_embed_weight)
-
-    def computer(self, adj, delta_u=None, delta_i=None, mask=None):
+    def computer(self, adj, delta_u=None, delta_i=None, mask_prob=None):
         """
         propagate methods for lightGCN
         """
@@ -83,6 +78,9 @@ class LightGCN(nn.Module):
             items_emb = self.embedding_item.weight + delta_i
 
         all_emb = torch.cat([users_emb, items_emb])
+        if mask_prob is not None:
+            mask = all_emb.data.new_empty((all_emb.shape[0], 1)).bernoulli_(1 - mask_prob).expand_as(all_emb).to(self.device)
+            all_emb = mask * all_emb
         #   torch.split(all_emb , [self.num_users, self.num_items])
         embs = [all_emb]
 
@@ -115,11 +113,11 @@ class LightGCN(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, mask=None):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, mask_prob=None):
         """
         query from GROC means that we want to push adj into computational graph
         """
-        all_users, all_items = self.computer(adj)
+        all_users, all_items = self.computer(adj, mask_prob)
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
         # neg_emb = all_items[neg_items]
@@ -141,7 +139,7 @@ class LightGCN(nn.Module):
         # negative_mask=torch.cat((negative_mask,negative_mask),0)
         return negative_mask
 
-    def bpr_loss(self, adj, users, poss, negative):
+    def bpr_loss(self, adj, users, poss, negative, mask_prob=None):
         '''
         (users_emb, pos_emb, neg_emb,
          userEmb0, posEmb0, negEmb0) = self.getEmbedding(adj, users.long(), pos.long(), neg.long())
@@ -156,7 +154,7 @@ class LightGCN(nn.Module):
         loss = torch.mean(torch.nn.functional.softplus(neg_scores - pos_scores))
         '''
 
-        (users_emb, pos_emb, userEmb0, posEmb0, neg_emb) = self.getEmbedding(adj, users.long(), poss.long(), negative.long())
+        (users_emb, pos_emb, userEmb0, posEmb0, neg_emb) = self.getEmbedding(adj, users.long(), poss.long(), negative.long(), mask_prob)
         # pos_emb_old=pos_emb
         if self.use_dcl:
             users_emb = nn.functional.normalize(users_emb, dim=1)
@@ -195,7 +193,7 @@ class LightGCN(nn.Module):
 
         return loss, reg_loss
 
-    def _train_with_val(self, adj, users, posItems, negItems, users_val, val_dict, dataset, dataset_py):
+    def _train_with_val(self, adj, users, posItems, negItems, users_val, val_dict, dataset, dataset_py, mask_prob=None):
         local_path = os.path.abspath(os.path.dirname(os.getcwd()))
         if not os.path.exists(local_path + '/models/{}'.format(dataset)):
             os.mkdir(local_path + '/models/{}'.format(dataset))
@@ -233,7 +231,7 @@ class LightGCN(nn.Module):
                                                            posItems,
                                                            negItems,
                                                            batch_size=2048)):
-                loss, reg_loss = self.bpr_loss(adj, batch_users, batch_pos, batch_neg)
+                loss, reg_loss = self.bpr_loss(adj, batch_users, batch_pos, batch_neg, mask_prob)
                 reg_loss = reg_loss * self.weight_decay
                 loss = loss + reg_loss
 
