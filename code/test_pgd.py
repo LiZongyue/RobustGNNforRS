@@ -110,6 +110,9 @@ parser.add_argument('--use_dcl', type=bool, default=False, help='mask embedding 
 parser.add_argument('--k', type=float, default=0.01, help='mask embedding of users/items of GCN')
 parser.add_argument('--valid_freq', type=int, default=1, help='mask embedding of users/items of GCN')
 parser.add_argument('--save_to', type=str, default='tmp', help='mask embedding of users/items of GCN')
+parser.add_argument('--mask_type', type=str, default='mask_normalized_aggregated_emb',
+                    help='mask embedding of users/items of GCN. Candidates: mask_aggregated_emb mask_normalized_aggregated_emb'
+                         'and mask_emb')
 parser.add_argument('--val_batch_size', type=int, default=2048, help='BS.')
 parser.add_argument('--train_baseline', type=bool, default=False, help='BS.')
 parser.add_argument('--prepare_adj_data', type=bool, default=False, help='BS.')
