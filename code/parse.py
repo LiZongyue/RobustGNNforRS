@@ -94,6 +94,7 @@ def parse_args():
     parser.add_argument('--insert_prob_1', type=float, default=0.4, help='mask embedding of users/items of GCN')
     parser.add_argument('--insert_prob_2', type=float, default=0.4, help='mask embedding of users/items of GCN')
     parser.add_argument('--remove_prob_1', type=float, default=0.2, help='mask embedding of users/items of GCN')
+    parser.add_argument('--file', type=str, default='', help='file name of model')
     parser.add_argument('--remove_prob_2', type=float, default=0.4, help='mask embedding of users/items of GCN')
 
     return parser.parse_args()
