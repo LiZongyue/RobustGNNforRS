@@ -18,7 +18,7 @@ a8 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/perturb-adj/mod
 adj_list = [a2, a4, a6, a8]
 num_users = dataset.n_user
 num_items = dataset.m_item
-path_model_base = "/home/stud/zongyue/workarea/RobustGNNforRS/model/GROC_models/ml-1m/" + args.file
+path_model_base = "/home/stud/zongyue/workarea/RobustGNNforRS/models/GROC_models/ml-1m/" + args.file
 
 groc_lgn = lightgcn.LightGCN(device, num_users, num_items, sparse=True, is_light_gcn=True, use_dcl=False, train_groc=False)
 groc_lgn.load_state_dict(torch.load(path_model_base)).to(device)
