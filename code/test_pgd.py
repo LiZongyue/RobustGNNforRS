@@ -264,11 +264,11 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
                   '/models/GROC_models/{}/{}_{}_{}_after_{}_{}_{}_{}_{}.ckpt'.format(args_.dataset, today_,
                                                                                        model_, dcl, bpr_gradient_, mode,
                                                                                        bpr_flag_, args_.loss_weight_bpr,
-                                                                                       args_.batch_size)
+                                                                                       args_.groc_batch_size)
     log_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
                 '/log/GROC_logs/{}/{}_{}_{}_after_{}_{}_{}_{}_{}.log'.format(args_.dataset, today_, model_, dcl,
                                                                                bpr_gradient_, mode, bpr_flag_,
-                                                                               args_.loss_weight_bpr, args_.batch_size)
+                                                                               args_.loss_weight_bpr, args_.groc_batch_size)
     groc_.groc_train_with_bpr_sparse(data_len_, users_, posItems_, negItems_, users_val_, posItems_val_,
                                      negItems_val_, val_dict_, model_path_, log_path_, adj_rm_1=adj_rm_1, adj_rm_2=adj_rm_2,
                                      sparse=False)
