@@ -349,10 +349,10 @@ class GROC_loss(nn.Module):
                 eval_log.append("Valid GROC Loss: {}".format(val_aver_groc_loss))
                 for adj_idx in range(1, 5):
                     eval_log.append("=========================")
-                    eval_log.append(":Test precision@20 A{} {}".format(adj_idx, res_test[0]['precision']))
-                    eval_log.append(":Test recall@20 A{} {}".format(adj_idx, res_test[0]['recall']))
-                    eval_log.append(":Test ndcg@20 A{} {}".format(adj_idx, res_test[0]['ndcg']))
-                    eval_log.append(":Test auc A{} {}".format(adj_idx, res_test[0]['auc']))
+                    eval_log.append(":Test precision@20 A{} {}".format(adj_idx, res_test[adj_idx-1]['precision']))
+                    eval_log.append(":Test recall@20 A{} {}".format(adj_idx, res_test[adj_idx-1]['recall']))
+                    eval_log.append(":Test ndcg@20 A{} {}".format(adj_idx, res_test[adj_idx-1]['ndcg']))
+                    eval_log.append(":Test auc A{} {}".format(adj_idx, res_test[adj_idx-1]['auc']))
                     eval_log.append("=========================")
 
                 utils.append_log_to_file(eval_log, i, log_file_name)
