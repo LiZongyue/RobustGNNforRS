@@ -15,7 +15,7 @@ from GraphContrastiveLoss import ori_gcl_computing
 
 
 class GROC_loss(nn.Module):
-    def __init__(self, ori_model, ori_adj, d_mtr, adj_with_2_hops, args, pgd_model=None):
+    def __init__(self, ori_model, ori_adj, d_mtr, adj_with_2_hops, args, adj_list, pgd_model=None):
         super(GROC_loss, self).__init__()
         self.ori_adj = ori_adj
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -26,6 +26,7 @@ class GROC_loss(nn.Module):
         self.num_users = self.ori_model.num_users
         self.num_items = self.ori_model.num_items
         self.pgd_model = pgd_model
+        self.adj_list = adj_list
         if self.args.use_IntegratedGradient:
             self.integrated_gradient = IntegratedGradients(self.ori_model, self.args, self.device, sparse=True)
 
@@ -332,17 +333,27 @@ class GROC_loss(nn.Module):
                     str_list.insert(-5, str(i))
                     checkpoint_name = ''.join(str_list)
                     utils.save_model(self.ori_model, checkpoint_name)
+                res_test = []
+
+                for adj in self.adj_list:
+                    res_test.append(Procedure.Test(dataset, self.ori_model, 100, utils.normalize_adj_tensor(adj), None, 0))
 
                 now = datetime.now()
 
                 current_time = now.strftime("%H:%M:%S")
                 eval_log.append("Current Time = {}".format(current_time))
                 eval_log.append("=======================")
-                eval_log.append("Recall@20: {}:".format(recall))
+                # eval_log.append("Recall@20: {}:".format(recall))
                 eval_log.append("Valid total Loss: {}".format(val_aver_loss))
                 eval_log.append("Valid BPR Loss: {}".format(val_aver_bpr_loss))
                 eval_log.append("Valid GROC Loss: {}".format(val_aver_groc_loss))
-                eval_log.append("=========================")
+                for adj_idx in range(1, 5):
+                    eval_log.append("=========================")
+                    eval_log.append(":Test precision@20 A{} {}".format(adj_idx, res_test[0]['precision']))
+                    eval_log.append(":Test recall@20 A{} {}".format(adj_idx, res_test[0]['recall']))
+                    eval_log.append(":Test ndcg@20 A{} {}".format(adj_idx, res_test[0]['ndcg']))
+                    eval_log.append(":Test auc A{} {}".format(adj_idx, res_test[0]['auc']))
+                    eval_log.append("=========================")
 
                 utils.append_log_to_file(eval_log, i, log_file_name)
 
@@ -395,8 +406,8 @@ class GROC_loss(nn.Module):
             self.ori_model.requires_grad_(False)
         model_name = self.ori_model.__class__.__name__
         groc_loss = ori_gcl_computing(self.ori_model, adj_rm_norm_1, adj_rm_norm_2, batch_users,
-                                      batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
-                                      mask_2=self.args.mask_prob_2, model_name=model_name)
+                                      batch_pos, self.args, self.device, mask_p_1=self.args.mask_prob_1,
+                                      mask_p_2=self.args.mask_prob_2, model_name=model_name)
         if self.device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
@@ -496,8 +507,8 @@ class GROC_loss(nn.Module):
         if val:
             self.ori_model.requires_grad_(False)
         groc_loss = ori_gcl_computing(self.ori_model, adj_norm_1, adj_norm_2, batch_users,
-                                      batch_pos, self.args, self.device, mask_1=self.args.mask_prob_1,
-                                      mask_2=self.args.mask_prob_2, model_name=model_name)
+                                      batch_pos, self.args, self.device, mask_p_1=self.args.mask_prob_1,
+                                      mask_p_2=self.args.mask_prob_2, model_name=model_name)
 
         del adj_norm_1
         del adj_norm_2
