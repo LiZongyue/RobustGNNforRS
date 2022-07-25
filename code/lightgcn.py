@@ -117,7 +117,7 @@ class LightGCN(nn.Module):
         """
         query from GROC means that we want to push adj into computational graph
         """
-        all_users, all_items = self.computer(adj, mask_prob)
+        all_users, all_items = self.computer(adj, mask_prob=mask_prob)
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
         # neg_emb = all_items[neg_items]
