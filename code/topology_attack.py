@@ -82,7 +82,7 @@ class PGDAttack(BaseAttack):
         adj_norm = utils.normalize_adj_tensor(modified_adj)
 
         loss, reg_loss = victim_model.bpr_loss(adj_norm, batch_users, batch_pos, batch_neg)
-
+        assert self.adj_changes.requires_grad, 'No require grad'
         adj_grad = torch.autograd.grad(loss, self.adj_changes, retain_graph=True)[0]
 
         # lr=200/np.sqrt(t+1)
