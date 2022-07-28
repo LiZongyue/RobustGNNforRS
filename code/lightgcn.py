@@ -43,19 +43,41 @@ class LightGCN(nn.Module):
     def fit(self, adj, d, users, posItems, negItems, users_val, val_dict, dataset, dataset_py):
         if self._is_sparse:
             if type(adj) is not torch.Tensor:
-                adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
-                adj = utils.to_tensor(adj_norm, device=self.device)
+                if self.is_lightgcn:
+                    adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
+                    adj = utils.to_tensor(adj_norm, device=self.device)
+                else:
+                    # gccf
+                    adj = adj + torch.eye(adj.shape[0]).to_sparse().to(self.device)
+                    adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
+                    adj = utils.to_tensor(adj_norm, device=self.device)
             else:
-                adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
-                adj = adj_norm.to(self.device)
+                if self.is_lightgcn:
+                    adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
+                    adj = adj_norm.to(self.device)
+                else:
+                    # gccf
+                    adj = adj + torch.eye(adj.shape[0]).to_sparse().to(self.device)
+                    adj_norm = utils.normalize_adj_tensor(adj, d, sparse=True)
+                    adj = adj_norm.to(self.device)
             # self.adj=adj
         else:
             if type(adj) is not torch.Tensor:
-                adj_norm = utils.normalize_adj_tensor(adj)
-                adj = utils.to_tensor(adj_norm, device=self.device)
+                if self.is_lightgcn:
+                    adj_norm = utils.normalize_adj_tensor(adj)
+                    adj = utils.to_tensor(adj_norm, device=self.device)
+                else:
+                    adj = adj + torch.eye(adj.shape[0]).to(self.device)
+                    adj_norm = utils.normalize_adj_tensor(adj)
+                    adj = utils.to_tensor(adj_norm, device=self.device)
             else:
-                adj_norm = utils.normalize_adj_tensor(adj)
-                adj = adj_norm.to(self.device)
+                if self.is_lightgcn:
+                    adj_norm = utils.normalize_adj_tensor(adj)
+                    adj = adj_norm.to(self.device)
+                else:
+                    adj = adj + torch.eye(adj.shape[0]).to(self.device)
+                    adj_norm = utils.normalize_adj_tensor(adj)
+                    adj = adj_norm.to(self.device)
 
         self._train_with_val(adj, users, posItems, negItems, users_val, val_dict, dataset, dataset_py)
 
@@ -244,55 +266,55 @@ class LightGCN(nn.Module):
                 print("Epoch {} BPR training Loss: {}".format(i, aver_loss))
 
             self.eval()
-            save = False
+            save = True
             with torch.no_grad():
                 eval_log.append("Valid Epoch: {}:".format(i))
-                recall = Procedure.val_recall(users_val, val_dict, dataset_py, self, adj)
-                eval_log.append("Recall@20: {}:".format(recall))
-                if recall > recall_max:
-                    early_stopping_count = 0
-                    save = True
+                # recall = Procedure.val_recall(users_val, val_dict, dataset_py, self, adj)
+                # eval_log.append("Recall@20: {}:".format(recall))
+                # if recall > recall_max:
+                #     early_stopping_count = 0
+                #     save = True
+                # else:
+                #     early_stopping_count += 1
+                # if save:
+                #     utils.save_model(self, checkpoint_file_name)
+                #     eval_log.append("Recall@20 increase from {} to {}, save model!".format(recall_max, recall))
+                #     utils.append_log_to_file(eval_log, i, log_file_name)
+                #     recall_max = recall
+                # if early_stopping_count > 50:
+                #     break
+
+                aver_val_loss = 0.
+                total_batch_val = len(users_val) // 2048 + 1
+                users_val = users_val.to(self.device)
+                posItems_val = posItems_val.to(self.device)
+                negItems_val = negItems_val.to(self.device)
+                users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
+                for (batch_i,
+                     (batch_users_val,
+                      batch_pos_val,
+                      batch_neg_val)) in enumerate(utils.minibatch(users_val,
+                                                                   posItems_val,
+                                                                   negItems_val,
+                                                                   batch_size=2048)):
+                    val_loss, val_reg_loss = self.bpr_loss(adj, batch_users_val, batch_pos_val, batch_neg_val)
+                    val_reg_loss = val_reg_loss * self.weight_decay
+                    val_loss = val_loss + val_reg_loss
+
+                    aver_val_loss += val_loss
+
+                aver_val_loss = aver_val_loss / total_batch_val
+                eval_log.append("Valid Epoch: {}:".format(i))
+                if self.is_lightgcn:
+                    eval_log.append("average Val Loss LightGCN: {}:".format(aver_val_loss))
                 else:
-                    early_stopping_count += 1
+                    eval_log.append("average Val Loss LR-GCCF: {}:".format(aver_val_loss))
+                if aver_val_loss < min_val_loss:
+                    save = True
+
                 if save:
                     utils.save_model(self, checkpoint_file_name)
-                    eval_log.append("Recall@20 increase from {} to {}, save model!".format(recall_max, recall))
+                    eval_log.append("Val loss decrease from {} to {}, save model!".format(aver_val_loss, min_val_loss))
                     utils.append_log_to_file(eval_log, i, log_file_name)
-                    recall_max = recall
-                if early_stopping_count > 50:
-                    break
-
-            #     aver_val_loss = 0.
-            #     total_batch_val = len(users_val) // 2048 + 1
-            #     users_val = users_val.to(self.device)
-            #     posItems_val = posItems_val.to(self.device)
-            #     negItems_val = negItems_val.to(self.device)
-            #     users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
-            #     for (batch_i,
-            #          (batch_users_val,
-            #           batch_pos_val,
-            #           batch_neg_val)) in enumerate(utils.minibatch(users_val,
-            #                                                        posItems_val,
-            #                                                        negItems_val,
-            #                                                        batch_size=2048)):
-            #         val_loss, val_reg_loss = self.bpr_loss(adj, batch_users_val, batch_pos_val, batch_neg_val)
-            #         val_reg_loss = val_reg_loss * self.weight_decay
-            #         val_loss = val_loss + val_reg_loss
-            #
-            #         aver_val_loss += val_loss
-            #
-            #     aver_val_loss = aver_val_loss / total_batch_val
-            #     eval_log.append("Valid Epoch: {}:".format(i))
-            #     if self.is_lightgcn:
-            #         eval_log.append("average Val Loss LightGCN: {}:".format(aver_val_loss))
-            #     else:
-            #         eval_log.append("average Val Loss LR-GCCF: {}:".format(aver_val_loss))
-            #     if aver_val_loss < min_val_loss:
-            #         save = True
-            #
-            #     if save:
-            #         utils.save_model(self, checkpoint_file_name)
-            #         eval_log.append("Val loss decrease from {} to {}, save model!".format(aver_val_loss, min_val_loss))
-            #         utils.append_log_to_file(eval_log, i, log_file_name)
-            #         min_val_loss = aver_val_loss
+                    min_val_loss = aver_val_loss
 

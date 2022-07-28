@@ -4,16 +4,16 @@ import os
 import lightgcn
 
 
-def attack_model(recmodel, adj_matrix, perturbations, path, ids, flag, users, posItems, negItems, num_users, device):
+def attack_model(recmodel, adj_matrix, perturbations, path, ids, flag, users, posItems, negItems, num_users, device, model_name, dataset):
     model = PGDAttack(model=recmodel, nnodes=adj_matrix.shape[0], loss_type='CE', device=device)
 
     model = model.to(device)
     print("attack light-GCN model_PGD")
     print("=================================================")
 
-    print('searching saved matrix from path {}...'.format(path.format(ids[flag])))
+    print('searching saved matrix from path {}...'.format(path.format(dataset, model_name, ids[flag])))
     print("=================================================")
-    if not os.path.exists(path.format(ids[flag])):
+    if not os.path.exists(path.format(dataset, model_name, ids[flag])):
         print('matrix doesn"t exist, attacking...')
         print("=================================================")
         model.attack(adj_matrix, perturbations, users, posItems, negItems, num_users, path, ids, flag)
@@ -21,7 +21,8 @@ def attack_model(recmodel, adj_matrix, perturbations, path, ids, flag, users, po
     else:
         print('load matrix from disc...')
         print("=================================================")
-        modified_adj = torch.load(path.format(ids[flag]), map_location='cpu')
+        modified_adj = torch.load(path.format(dataset, model_name, ids[flag]))
+        # modified_adj = torch.load(path.format(dataset, model_name, ids[flag]), map_location='cpu')
         modified_adj = modified_adj.to(device)
 
     try:
