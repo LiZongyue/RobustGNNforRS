@@ -502,6 +502,7 @@ if args.random_perturb:
 if args.pgd_attack:
     print("train model with pgd attack")
     print("=================================================")
+    adj = adj.to_dense()
     # Setup Attack Model
     if args.model_ngcf:
         print("NGCF PGD attack.")
