@@ -507,11 +507,17 @@ if args.pgd_attack:
         print("NGCF PGD attack.")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
         model = 'NGCF'
+        modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                    args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
+                                    args.dataset)
 
     if args.model_gcmc:
         print("GCMC PGD attack.")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
         model = 'GCMC'
+        modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                    args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
+                                    args.dataset)
 
     # if args.model_lightgcn:
     #     print("LightGCN PGD attack.")
@@ -521,9 +527,10 @@ if args.pgd_attack:
         print("LR-GCCF PGD attack.")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
         model = 'GCCF'
+        modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                    args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
+                                    args.dataset)
 
-    modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
-                                args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model)
 
 if args.embedding_attack:
     print("train model with embedding adversarial attack")
