@@ -37,7 +37,6 @@ class PGDAttack(BaseAttack):
         victim_model.eval()
         epochs = 200
         for t in tqdm(range(epochs)):
-
             users = users.to(self.device)
             posItems = posItems.to(self.device)
             negItems = negItems.to(self.device)
@@ -45,7 +44,7 @@ class PGDAttack(BaseAttack):
 
             modified_adj = self.get_modified_adj(ori_adj, num_users)
             adj_norm = utils.normalize_adj_tensor(modified_adj)
-            adj_norm.requires_grad = True
+            # adj_norm.requires_grad = True
 
             for (batch_i,
                  (batch_users,
