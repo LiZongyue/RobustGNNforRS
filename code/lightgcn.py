@@ -277,6 +277,7 @@ class LightGCN(nn.Module):
                     save = True
                 else:
                     early_stopping_count += 1
+                    save = False
                 if save:
                     utils.save_model(self, checkpoint_file_name)
                     eval_log.append("Recall@20 increase from {} to {}, save model!".format(recall_max, recall))
