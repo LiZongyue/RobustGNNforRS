@@ -45,6 +45,9 @@ class BasicDataset(Dataset):
     def allPos(self):
         raise NotImplementedError
 
+    def allPosvalid(self):
+        raise NotImplementedError
+
     def allPostest(self):
         raise NotImplementedError
 
@@ -240,9 +243,11 @@ class Loader(BasicDataset):
         self.n_user = 0
         self.m_item = 0
         train_file = path + '/train.txt'
+        val_file = path + '/valid.txt'
         test_file = path + '/test.txt'
         self.path = path
         trainUniqueUsers, trainItem, trainUser = [], [], []
+        valUniqueUsers, valItem, valUser = [], [], []
         testUniqueUsers, testItem, testUser = [], [], []
         self.traindataSize = 0
         self.testDataSize = 0
@@ -262,6 +267,25 @@ class Loader(BasicDataset):
         self.trainUniqueUsers = np.array(trainUniqueUsers)
         self.trainUser = np.array(trainUser)
         self.trainItem = np.array(trainItem)
+
+        with open(val_file) as f:
+            for l in f.readlines():
+                if len(l) > 0:
+                    try:
+                        l = l.strip('\n').split(' ')
+                        items = [int(i) for i in l[1:]]
+                        uid = int(l[0])
+                        valUniqueUsers.append(uid)
+                        valUser.extend([uid] * len(items))
+                        valItem.extend(items)
+                        # self.n_user = max(self.n_user, uid)
+                        # self.testDataSize += len(items)
+                    except:
+                        pass
+
+        self.valUniqueUsers = np.array(valUniqueUsers)
+        self.valUser = np.array(valUser)
+        self.valItem = np.array(valItem)
 
         with open(test_file) as f:
             for l in f.readlines():
@@ -292,6 +316,8 @@ class Loader(BasicDataset):
         # (users,items), bipartite graph
         self.UserItemNet = csr_matrix((np.ones(len(self.trainUser)), (self.trainUser, self.trainItem)),
                                       shape=(self.n_user, self.m_item))
+        self.ValUserItemNet = csr_matrix((np.ones(len(self.valUser)), (self.valUser, self.valItem)),
+                                          shape=(self.n_user, self.m_item))
         self.TestUserItemNet = csr_matrix((np.ones(len(self.testUser)), (self.testUser, self.testItem)),
                                           shape=(self.n_user, self.m_item))
         self.users_D = np.array(self.UserItemNet.sum(axis=1)).squeeze()
@@ -299,13 +325,20 @@ class Loader(BasicDataset):
         self.items_D = np.array(self.UserItemNet.sum(axis=0)).squeeze()
         self.items_D[self.items_D == 0.] = 1.
 
+        self.val_users_D = np.array(self.ValUserItemNet.sum(axis=1)).squeeze()
+        self.val_users_D[self.val_users_D == 0.] = 1
+        self.val_items_D = np.array(self.ValUserItemNet.sum(axis=0)).squeeze()
+        self.val_items_D[self.val_items_D == 0.] = 1.
+
         self.test_users_D = np.array(self.TestUserItemNet.sum(axis=1)).squeeze()
         self.test_users_D[self.test_users_D == 0.] = 1
         self.test_items_D = np.array(self.TestUserItemNet.sum(axis=0)).squeeze()
         self.test_items_D[self.test_items_D == 0.] = 1.
         # pre-calculate
         self._allPos = self.getUserPosItems(list(range(self.n_user)))
+        self._allPosvalid = self.getUserValidPosItems(list(range(self.n_user)))
         self._allPostest = self.getUserTestPosItems(list(range(self.n_user)))
+        self.__valDict = self.__build_val()
         self.__testDict = self.__build_test()
         print(f"{world.dataset} is ready to go")
 
@@ -322,12 +355,20 @@ class Loader(BasicDataset):
         return self.traindataSize
 
     @property
+    def valDict(self):
+        return self.__valDict
+
+    @property
     def testDict(self):
         return self.__testDict
 
     @property
     def allPos(self):
         return self._allPos
+
+    @property
+    def allPosvalid(self):
+        return self._allPosvalid
 
     @property
     def allPostest(self):
@@ -395,6 +436,20 @@ class Loader(BasicDataset):
                 test_data[user] = [item]
         return test_data
 
+    def __build_val(self):
+        """
+        return:
+            dict: {user: [items]}
+        """
+        val_data = {}
+        for i, item in enumerate(self.valItem):
+            user = self.valUser[i]
+            if val_data.get(user):
+                val_data[user].append(item)
+            else:
+                val_data[user] = [item]
+        return val_data
+
     def getUserItemFeedback(self, users, items):
         """
         users:
@@ -417,6 +472,12 @@ class Loader(BasicDataset):
         posItems = []
         for user in users:
             posItems.append(self.TestUserItemNet[user].nonzero()[1])
+        return posItems
+
+    def getUserValidPosItems(self, users):
+        posItems = []
+        for user in users:
+            posItems.append(self.ValUserItemNet[user].nonzero()[1])
         return posItems
 
     # def getUserNegItems(self, users):

@@ -40,7 +40,7 @@ class LightGCN(nn.Module):
             nn.init.normal_(self.embedding_user.weight, std=0.01)
             nn.init.normal_(self.embedding_item.weight, std=0.01)
 
-    def fit(self, adj, d, users, posItems, negItems, users_val, val_dict, dataset, dataset_py):
+    def fit(self, adj, d, users, posItems, negItems, dataset, dataset_py):
         if self._is_sparse:
             if type(adj) is not torch.Tensor:
                 if self.is_lightgcn:
@@ -79,7 +79,7 @@ class LightGCN(nn.Module):
                     adj_norm = utils.normalize_adj_tensor(adj)
                     adj = adj_norm.to(self.device)
 
-        self._train_with_val(adj, users, posItems, negItems, users_val, val_dict, dataset, dataset_py)
+        self._train_with_val(adj, users, posItems, negItems, dataset, dataset_py)
 
     def getUsersRating(self, adj, users):
         all_users, all_items = self.computer(adj)
@@ -215,7 +215,7 @@ class LightGCN(nn.Module):
 
         return loss, reg_loss
 
-    def _train_with_val(self, adj, users, posItems, negItems, users_val, val_dict, dataset, dataset_py, mask_prob=None):
+    def _train_with_val(self, adj, users, posItems, negItems, dataset, dataset_py, mask_prob=None):
         local_path = os.path.abspath(os.path.dirname(os.getcwd()))
         if not os.path.exists(local_path + '/models/{}'.format(dataset)):
             os.mkdir(local_path + '/models/{}'.format(dataset))
@@ -236,14 +236,14 @@ class LightGCN(nn.Module):
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         recall_max = 0
         early_stopping_count = 0
-        for i in range(100):
+        users = users.to(self.device)
+        posItems = posItems.to(self.device)
+        negItems = negItems.to(self.device)
+        users, posItems, negItems = utils.shuffle(users, posItems, negItems)
+        for i in range(1000):
             eval_log = []
             self.train()
             optimizer.zero_grad()
-            users = users.to(self.device)
-            posItems = posItems.to(self.device)
-            negItems = negItems.to(self.device)
-            users, posItems, negItems = utils.shuffle(users, posItems, negItems)
             total_batch = len(users) // 2048 + 1
             aver_loss = 0.
             for (batch_i,
@@ -269,52 +269,53 @@ class LightGCN(nn.Module):
             save = True
             with torch.no_grad():
                 eval_log.append("Valid Epoch: {}:".format(i))
-                # recall = Procedure.val_recall(users_val, val_dict, dataset_py, self, adj)
-                # eval_log.append("Recall@20: {}:".format(recall))
-                # if recall > recall_max:
-                #     early_stopping_count = 0
-                #     save = True
-                # else:
-                #     early_stopping_count += 1
-                # if save:
-                #     utils.save_model(self, checkpoint_file_name)
-                #     eval_log.append("Recall@20 increase from {} to {}, save model!".format(recall_max, recall))
-                #     utils.append_log_to_file(eval_log, i, log_file_name)
-                #     recall_max = recall
-                # if early_stopping_count > 50:
-                #     break
-
-                aver_val_loss = 0.
-                total_batch_val = len(users_val) // 2048 + 1
-                users_val = users_val.to(self.device)
-                posItems_val = posItems_val.to(self.device)
-                negItems_val = negItems_val.to(self.device)
-                users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
-                for (batch_i,
-                     (batch_users_val,
-                      batch_pos_val,
-                      batch_neg_val)) in enumerate(utils.minibatch(users_val,
-                                                                   posItems_val,
-                                                                   negItems_val,
-                                                                   batch_size=2048)):
-                    val_loss, val_reg_loss = self.bpr_loss(adj, batch_users_val, batch_pos_val, batch_neg_val)
-                    val_reg_loss = val_reg_loss * self.weight_decay
-                    val_loss = val_loss + val_reg_loss
-
-                    aver_val_loss += val_loss
-
-                aver_val_loss = aver_val_loss / total_batch_val
-                eval_log.append("Valid Epoch: {}:".format(i))
-                if self.is_lightgcn:
-                    eval_log.append("average Val Loss LightGCN: {}:".format(aver_val_loss))
-                else:
-                    eval_log.append("average Val Loss LR-GCCF: {}:".format(aver_val_loss))
-                if aver_val_loss < min_val_loss:
+                res = Procedure.Test(dataset_py, self, 100, adj, val=True)
+                recall = res['recall']
+                eval_log.append("Recall@20: {}:".format(recall))
+                if recall > recall_max:
+                    early_stopping_count = 0
                     save = True
-
+                else:
+                    early_stopping_count += 1
                 if save:
                     utils.save_model(self, checkpoint_file_name)
-                    eval_log.append("Val loss decrease from {} to {}, save model!".format(aver_val_loss, min_val_loss))
+                    eval_log.append("Recall@20 increase from {} to {}, save model!".format(recall_max, recall))
                     utils.append_log_to_file(eval_log, i, log_file_name)
-                    min_val_loss = aver_val_loss
+                    recall_max = recall
+                if early_stopping_count > 50:
+                    break
+
+                # aver_val_loss = 0.
+                # total_batch_val = len(users_val) // 2048 + 1
+                # users_val = users_val.to(self.device)
+                # posItems_val = posItems_val.to(self.device)
+                # negItems_val = negItems_val.to(self.device)
+                # users_val, posItems_val, negItems_val = utils.shuffle(users_val, posItems_val, negItems_val)
+                # for (batch_i,
+                #      (batch_users_val,
+                #       batch_pos_val,
+                #       batch_neg_val)) in enumerate(utils.minibatch(users_val,
+                #                                                    posItems_val,
+                #                                                    negItems_val,
+                #                                                    batch_size=2048)):
+                #     val_loss, val_reg_loss = self.bpr_loss(adj, batch_users_val, batch_pos_val, batch_neg_val)
+                #     val_reg_loss = val_reg_loss * self.weight_decay
+                #     val_loss = val_loss + val_reg_loss
+                #
+                #     aver_val_loss += val_loss
+                #
+                # aver_val_loss = aver_val_loss / total_batch_val
+                # eval_log.append("Valid Epoch: {}:".format(i))
+                # if self.is_lightgcn:
+                #     eval_log.append("average Val Loss LightGCN: {}:".format(aver_val_loss))
+                # else:
+                #     eval_log.append("average Val Loss LR-GCCF: {}:".format(aver_val_loss))
+                # if aver_val_loss < min_val_loss:
+                #     save = True
+
+                # if save:
+                #     utils.save_model(self, checkpoint_file_name)
+                #     eval_log.append("Val loss decrease from {} to {}, save model!".format(aver_val_loss, min_val_loss))
+                #     utils.append_log_to_file(eval_log, i, log_file_name)
+                #     min_val_loss = aver_val_loss
 

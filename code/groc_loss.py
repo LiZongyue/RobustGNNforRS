@@ -214,7 +214,7 @@ class GROC_loss(nn.Module):
 
         return optimizer
 
-    def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val, val_dict, checkpoint_file_name, log_file_name, adj_rm_1=None, adj_rm_2=None, sparse=True):
+    def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val, checkpoint_file_name, log_file_name, adj_rm_1=None, adj_rm_2=None, sparse=True):
         self.ori_model.train()
         embedding_param = []
         adj_param = []
