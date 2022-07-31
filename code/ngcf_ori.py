@@ -285,7 +285,7 @@ class NGCF(nn.Module):
                 print("Epoch {} BPR training Loss: {}".format(i, aver_loss))
 
             self.eval()
-            save = True
+
             with torch.no_grad():
                 eval_log.append("Valid Epoch: {}:".format(i))
                 res = Procedure.Test(dataset_py, self, 100, adj, val=True)
