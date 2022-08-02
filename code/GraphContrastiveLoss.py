@@ -3,13 +3,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def embed_mask(mask_type, users_emb_perturb_1, users_emb_perturb_2, mask_1, mask_2):
+def embed_mask(trn_model, mask_type, users_emb_perturb_1, users_emb_perturb_2, mask_p_1, mask_p_2):
+    mask_1 = (torch.FloatTensor(trn_model.latent_dim).uniform_() < mask_p_1).to(trn_model.device)
+    mask_2 = (torch.FloatTensor(trn_model.latent_dim).uniform_() < mask_p_2).to(trn_model.device)
     if mask_type == 'mask_normalized_aggregated_emb':
         users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1).masked_fill_(mask_1, 0.)
         users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2, dim=1).masked_fill_(mask_2, 0.)
     elif mask_type == 'mask_aggregated_emb':
         users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1.masked_fill_(mask_1, 0.), dim=1)
         users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2.masked_fill_(mask_2, 0.), dim=1)
+    elif mask_type == 'mask_aggregated_emb_node':
+        users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1)
+        users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2, dim=1)
+        mask_1 = users_emb_perturb_1.new_empty((users_emb_perturb_1.shape[0], 1)).bernoulli_(1 - mask_p_1).expand_as(users_emb_perturb_1).to(trn_model.device)
+        users_emb_perturb_1 = mask_1 * users_emb_perturb_1
+        mask_2 = users_emb_perturb_2.new_empty((users_emb_perturb_2.shape[0], 1)).bernoulli_(1 - mask_p_2).expand_as(users_emb_perturb_2).to(trn_model.device)
+        users_emb_perturb_2 = mask_2 * users_emb_perturb_2
     elif mask_type == 'mask_emb':
         users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1)
         users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2, dim=1)
@@ -23,8 +32,7 @@ def ori_gcl_computing(trn_model, gra1, gra2, users, poss, args, device, gcl_for_
     """
     mask_1: prob of mask_1
     """
-    mask_1 = (torch.FloatTensor(trn_model.latent_dim).uniform_() < mask_p_1).to(trn_model.device)
-    mask_2 = (torch.FloatTensor(trn_model.latent_dim).uniform_() < mask_p_2).to(trn_model.device)
+
     if gcl_for_gradient:  # first GCL computing for edge gradient
         if model_name in ['NGCF', 'GCMC']:
             if args.mask_type == 'mask_emb':
@@ -34,16 +42,16 @@ def ori_gcl_computing(trn_model, gra1, gra2, users, poss, args, device, gcl_for_
                                                                         adj_drop_out=False, mask_prob=mask_p_2)
             else:
                 (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), adj_drop_out=False)
-                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(args.mask_type, users_emb_perturb, users_emb_perturb,
-                                                                      mask_1, mask_2)
+                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(trn_model, args.mask_type, users_emb_perturb, users_emb_perturb,
+                                                                      mask_p_1, mask_p_2)
         else:
             if args.mask_type == 'mask_emb':
                 (users_emb_perturb_1, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), mask_prob=mask_p_1)
                 (users_emb_perturb_2, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), mask_prob=mask_p_2)
             else:
                 (users_emb_perturb, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long())
-                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(args.mask_type, users_emb_perturb, users_emb_perturb,
-                                                                      mask_1, mask_2)
+                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(trn_model, args.mask_type, users_emb_perturb, users_emb_perturb,
+                                                                      mask_p_1, mask_p_2)
     else:  # generate gcl loss for 2 views of perturbated adjs and utilized for backward optimization
         if model_name in ['NGCF', 'GCMC']:
             if args.mask_type == 'mask_emb':
@@ -54,8 +62,8 @@ def ori_gcl_computing(trn_model, gra1, gra2, users, poss, args, device, gcl_for_
                                                                         adj_drop_out=False)
                 (users_emb_perturb_2, _, _, _) = trn_model.getEmbedding(gra2, users.long(), poss.long(),
                                                                         adj_drop_out=False)
-                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(args.mask_type, users_emb_perturb_1, users_emb_perturb_2,
-                                                                      mask_1, mask_2)
+                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(trn_model, args.mask_type, users_emb_perturb_1,
+                                                                      users_emb_perturb_2, mask_p_1, mask_p_2)
         else:
             if args.mask_type == 'mask_emb':
                 (users_emb_perturb_1, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long(), mask_prob=mask_p_1)
@@ -63,8 +71,8 @@ def ori_gcl_computing(trn_model, gra1, gra2, users, poss, args, device, gcl_for_
             else:
                 (users_emb_perturb_1, _, _, _) = trn_model.getEmbedding(gra1, users.long(), poss.long())
                 (users_emb_perturb_2, _, _, _) = trn_model.getEmbedding(gra2, users.long(), poss.long())
-                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(args.mask_type, users_emb_perturb_1, users_emb_perturb_2,
-                                                                      mask_1, mask_2)
+                users_emb_perturb_1, users_emb_perturb_2 = embed_mask(trn_model, args.mask_type, users_emb_perturb_1,
+                                                                      users_emb_perturb_2, mask_p_1, mask_p_2)
         # if mask_1 is not None:
         #     mask_1 = (torch.FloatTensor(users_emb_perturb_1.shape[1]).uniform_() < mask_1).to(trn_model.device)
         #     users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1).masked_fill_(mask_1, 0.)
