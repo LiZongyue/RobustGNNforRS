@@ -22,6 +22,9 @@ def embed_mask(trn_model, mask_type, users_emb_perturb_1, users_emb_perturb_2, m
     elif mask_type == 'mask_emb':
         users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1)
         users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2, dim=1)
+    elif mask_type == 'no_mask':
+        users_emb_perturb_1 = nn.functional.normalize(users_emb_perturb_1, dim=1)
+        users_emb_perturb_2 = nn.functional.normalize(users_emb_perturb_2, dim=1)
     else:
         raise Exception('mask_type parameter initilized incorrectly.')
     return users_emb_perturb_1, users_emb_perturb_2
