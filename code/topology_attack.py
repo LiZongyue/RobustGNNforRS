@@ -11,7 +11,7 @@ import utils
 
 class PGDAttack(BaseAttack):
     def __init__(self, model=None, nnodes=None, loss_type='CE', feature_shape=None, attack_structure=True,
-                 attack_features=False, device=None, model_name=None):
+                 attack_features=False, device=None, model_name=None, dataset=None):
         super(PGDAttack, self).__init__(model, nnodes, attack_structure, attack_features, device)
 
         assert attack_features or attack_structure, 'attack_features or attack_structure cannot be both False'
@@ -20,7 +20,7 @@ class PGDAttack(BaseAttack):
         self.modified_adj = None
         self.modified_features = None
         self.model_name = model_name
-
+        self.dataset = dataset
         if attack_structure:
             assert nnodes is not None, "Please give nnodes="
             self.adj_changes = Parameter(torch.FloatTensor(int(nnodes * (nnodes - 1) / 2)))
@@ -75,7 +75,7 @@ class PGDAttack(BaseAttack):
         self.random_sample(ori_adj, perturbations, users, posItems, negItems, num_users)
         self.modified_adj = self.get_modified_adj(ori_adj, num_users).detach()
 
-        torch.save(self.modified_adj, path.format(ids[flag]))
+        torch.save(self.modified_adj, path.format(self.dataset, self.model_name, ids[flag]))
 
     def attack_per_batch(self, ori_adj, perturbations, batch_users, batch_pos, batch_neg, num_users):
 

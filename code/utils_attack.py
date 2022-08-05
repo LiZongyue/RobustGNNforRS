@@ -5,7 +5,7 @@ import lightgcn
 
 
 def attack_model(recmodel, adj_matrix, perturbations, path, ids, flag, users, posItems, negItems, num_users, device, model_name, dataset):
-    model = PGDAttack(model=recmodel, nnodes=adj_matrix.shape[0], loss_type='CE', device=device, model_name=model_name)
+    model = PGDAttack(model=recmodel, nnodes=adj_matrix.shape[0], loss_type='CE', device=device, model_name=model_name, dataset=dataset)
 
     model = model.to(device)
     print("attack light-GCN model_PGD")
