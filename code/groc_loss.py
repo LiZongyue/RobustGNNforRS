@@ -517,7 +517,7 @@ class GROC_loss(nn.Module):
         gc.collect()
         if self.args.only_groc_for_cal:
             loss = groc_loss
-            bpr_loss = 0
+            bpr_loss = torch.zeros(1).to(self.device)
         else:
             if model_name in ['NGCF', 'GCMC']:
                 bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg, adj_drop_out=True)
