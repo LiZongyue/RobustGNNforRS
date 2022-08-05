@@ -7,13 +7,14 @@ import numpy as np
 import utils
 import Procedure
 
+
 class NGCF(nn.Module):
     def __init__(self, device, n_user, n_item, is_gcmc=False, sparse=True, use_dcl=True):
         super(NGCF, self).__init__()
         self.device = device
         self.lr = 0.001
         self.weight_decay = 1e-4
-        self.n_layers = 2
+        self.n_layers = 3
         self.num_users = n_user
         self.num_items = n_item
         self.adj_shape = self.num_items + self.num_users

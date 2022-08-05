@@ -11,7 +11,7 @@ import utils
 
 class PGDAttack(BaseAttack):
     def __init__(self, model=None, nnodes=None, loss_type='CE', feature_shape=None, attack_structure=True,
-                 attack_features=False, device=None):
+                 attack_features=False, device=None, model_name=None):
         super(PGDAttack, self).__init__(model, nnodes, attack_structure, attack_features, device)
 
         assert attack_features or attack_structure, 'attack_features or attack_structure cannot be both False'
@@ -19,6 +19,7 @@ class PGDAttack(BaseAttack):
         self.loss_type = loss_type
         self.modified_adj = None
         self.modified_features = None
+        self.model_name = model_name
 
         if attack_structure:
             assert nnodes is not None, "Please give nnodes="
@@ -53,7 +54,10 @@ class PGDAttack(BaseAttack):
                                                            posItems,
                                                            negItems,
                                                            batch_size=2048)):
-                loss, reg_loss = victim_model.bpr_loss(adj_norm, batch_users, batch_pos, batch_neg)
+                if self.model_name in ['NGCF', 'GCMC']:
+                    loss, reg_loss = victim_model.bpr_loss(adj_norm, batch_users, batch_pos, batch_neg, adj_drop_out=False)
+                else:
+                    loss, reg_loss = victim_model.bpr_loss(adj_norm, batch_users, batch_pos, batch_neg)
                 # reg_loss = reg_loss * self.weight_decay
                 # loss = loss + reg_loss
 
