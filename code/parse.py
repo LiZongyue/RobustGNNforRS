@@ -91,6 +91,7 @@ def parse_args():
     parser.add_argument('--mask_type', type=str, default='mask_normalized_aggregated_emb',
                         help='mask embedding of users/items of GCN. Candidates: mask_aggregated_emb, mask_normalized_aggregated_emb'
                              'and mask_emb')
+    parser.add_argument('--only_groc_for_cal', type=bool, default=False, help='Train Model only with GCL.')
     parser.add_argument('--insert_prob_1', type=float, default=0.4, help='mask embedding of users/items of GCN')
     parser.add_argument('--insert_prob_2', type=float, default=0.4, help='mask embedding of users/items of GCN')
     parser.add_argument('--remove_prob_1', type=float, default=0.2, help='mask embedding of users/items of GCN')

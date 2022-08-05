@@ -118,6 +118,7 @@ parser.add_argument('--mask_type', type=str, default='mask_normalized_aggregated
 parser.add_argument('--val_batch_size', type=int, default=2048, help='BS.')
 parser.add_argument('--train_baseline', type=bool, default=False, help='BS.')
 parser.add_argument('--prepare_adj_data', type=bool, default=False, help='BS.')
+parser.add_argument('--only_groc_for_cal', type=bool, default=False, help='Train Model only with GCL.')
 parser.add_argument('--with_bpr', type=bool, default=False, help='Import baseline and train with bpr loss backwards.')
 parser.add_argument('--train_groc_pipeline', type=bool, default=False, help='GROC training')
 parser.add_argument('--double_loss_baseline', type=bool, default=False, help='CL for RS baseline ')
@@ -315,7 +316,9 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
             # TODO: remove who? Largest or Smallest?
             gradient_adj = gradient_adj * adj_
             v, i = torch.topk(gradient_adj.flatten(), perturbations_, largest=largest)
-            ind_rm = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), gradient_adj.shape)).T).reshape(2, -1).to(device_)
+            ind_rm = torch.tensor(np.array(np.unravel_index(i.detach().cpu().numpy(), gradient_adj.shape)).T).reshape(2,
+                                                                                                                      -1).to(
+                device_)
             m = (torch.rand(perturbations_) > 0.6).to(device_)  # 0.4 * 0.5 = 0.2 drop
             ind_rm = ind_rm[:, m]
             val_rm = torch.ones(ind_rm.shape[1]).to(device_)
@@ -348,6 +351,7 @@ if args.train_baseline:
             print("LR-GCCF Baseline Model Calibration.")
             model = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_baseline(model, adj, d_mtr, users, posItems, negItems, args.dataset)
+
     elif args.double_loss:
         adj = adj.to_dense().to(device)
         bpr_gradient = 'baseline'

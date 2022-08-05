@@ -515,12 +515,15 @@ class GROC_loss(nn.Module):
         if self.device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
-        if model_name in ['NGCF', 'GCMC']:
-            bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg, adj_drop_out=True)
+        if self.args.only_groc_for_cal:
+            loss = groc_loss
         else:
-            bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
-        reg_loss = reg_loss * self.ori_model.weight_decay
-        loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
+            if model_name in ['NGCF', 'GCMC']:
+                bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg, adj_drop_out=True)
+            else:
+                bpr_loss, reg_loss = self.ori_model.bpr_loss(ori_adj_sparse, batch_users, batch_pos, batch_neg)
+            reg_loss = reg_loss * self.ori_model.weight_decay
+            loss = self.args.loss_weight_bpr * (bpr_loss + reg_loss) + (1 - self.args.loss_weight_bpr) * groc_loss
 
         return loss, bpr_loss, groc_loss
 
