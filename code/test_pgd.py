@@ -126,6 +126,7 @@ parser.add_argument('--double_loss', type=bool, default=False, help='CL for RS d
 parser.add_argument('--baseline_single_loss', type=bool, default=False, help='baseline with one loss. DCL or BPR')
 parser.add_argument('--train_with_bpr_perturb', type=bool, default=False, help='GROC training controller. GCL_DCL training ')
 parser.add_argument('--only_user_groc', type=bool, default=False, help='GROC training anchor node only from users ')
+parser.add_argument('--finetune_pretrained', type=bool, default=False, help='GROC training anchor node only from users ')
 parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                     help='GROC adj insert/remove with bpr gradient signals.')
 
@@ -414,7 +415,7 @@ if args.train_groc:
         bpr_gradient = 'without_bpr_gradient'
         if args.with_bpr_gradient:
             bpr_gradient = 'with_bpr_gradient'
-        if not args.with_bpr:
+        if not args.with_bpr and args.finetune_pretrained:
             path = os.path.abspath(os.path.dirname(os.getcwd())) + '/models/{}/LightGCN_baseline.ckpt'.format(
                 args.dataset)
             if not os.path.exists(path):
