@@ -1,4 +1,5 @@
 from val_data_splitor import path_check
+
 path_check()  # TODO find right place for this function
 import gc
 import torch
@@ -184,11 +185,17 @@ users_val, posItems_val, negItems_val = utils.getValidSet(dataset)
 
 data_len = len(users)
 
-a2 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/perturb-adj/modified_adj_a_02.pt").to(device)
-a4 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/perturb-adj/modified_adj_a_04.pt").to(device)
-a6 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/perturb-adj/modified_adj_a_06.pt").to(device)
-a8 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/perturb-adj/modified_adj_a_08.pt").to(device)
-adj_list = [a2, a4, a6, a8]
+
+def load_p_adj(dataset_name, model_name):
+    a2 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/{}/modified_adj_{}_a_02.pt".format(dataset_name, model_name)).to(device)
+    a4 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/{}/modified_adj_{}_a_04.pt".format(dataset_name, model_name)).to(device)
+    a6 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/{}/modified_adj_{}_a_06.pt".format(dataset_name, model_name)).to(device)
+    a8 = torch.load("/home/stud/zongyue/workarea/RobustGNNforRS/data/{}/modified_adj_{}_a_08.pt".format(dataset_name, model_name)).to(device)
+    # a2 = torch.load("C:/tmp/modified_adj_a_02.pt", map_location=torch.device('cpu')).to(device)
+    # a4 = torch.load("C:/tmp/modified_adj_a_04.pt", map_location=torch.device('cpu')).to(device)
+    # a6 = torch.load("C:/tmp/modified_adj_a_06.pt", map_location=torch.device('cpu')).to(device)
+    # a8 = torch.load("C:/tmp/modified_adj_a_08.pt", map_location=torch.device('cpu')).to(device)
+    return [a2, a4, a6, a8]
 
 
 def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, adj_, Recmodel_, d_mtr_, today_,
@@ -360,6 +367,7 @@ if args.train_baseline:
         if args.model_ngcf:
             print("NGCF Baseline Model with double Loss Calibration.")
             model = 'NGCF'
+            adj_list = load_p_adj(args.dataset, model)
             Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
                             bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
@@ -367,6 +375,7 @@ if args.train_baseline:
         if args.model_lightgcn:
             print("LightGCN Baseline Model with double Loss Calibration.")
             model = 'LightGCN'
+            adj_list = load_p_adj(args.dataset, model)
             Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
                             bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
@@ -374,16 +383,18 @@ if args.train_baseline:
         if args.model_gccf:
             print("GCCF Baseline Model with double Loss Calibration.")
             model = 'GCCF'
+            adj_list = load_p_adj(args.dataset, model)
             Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
 
         if args.model_gcmc:
             print("GCMC Baseline Model with double Loss Calibration.")
             model = 'GCMC'
+            adj_list = load_p_adj(args.dataset, model)
             Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
 
 if args.train_groc:
     if args.model_ngcf:
@@ -392,6 +403,7 @@ if args.train_groc:
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
         model = 'NGCF'
+        adj_list = load_p_adj(args.dataset, model)
         bpr_flag = 'with_BPR'
         bpr_gradient = 'without_bpr_gradient'
         if args.with_bpr_gradient:
@@ -411,6 +423,7 @@ if args.train_groc:
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=args.use_dcl)
         model = 'LightGCN'
+        adj_list = load_p_adj(args.dataset, model)
         bpr_flag = 'with_BPR'
         bpr_gradient = 'without_bpr_gradient'
         if args.with_bpr_gradient:
@@ -432,6 +445,7 @@ if args.train_groc:
         print("=================================================")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
         model = 'GCMC'
+        adj_list = load_p_adj(args.dataset, model)
         bpr_flag = 'with_BPR'
         bpr_gradient = 'without_bpr_gradient'
         if args.with_bpr_gradient:
@@ -451,6 +465,7 @@ if args.train_groc:
         print("=================================================")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
         model = 'GCCF'
+        adj_list = load_p_adj(args.dataset, model)
         bpr_flag = 'with_BPR'
         bpr_gradient = 'without_bpr_gradient'
         if args.with_bpr_gradient:
