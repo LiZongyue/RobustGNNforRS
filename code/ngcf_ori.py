@@ -82,7 +82,7 @@ class NGCF(nn.Module):
         self._train_with_val(adj, users, posItems, negItems, dataset, dataset_py)
 
     def getUsersRating(self, adj, users):
-        all_users, all_items = self.computer(adj)
+        all_users, all_items = self.computer(adj, adj_drop_out=False)
         users_emb = all_users[users.long()]
         items_emb = all_items
         rating = self.f(torch.matmul(users_emb, items_emb.t()))
