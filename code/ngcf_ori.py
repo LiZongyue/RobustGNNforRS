@@ -101,7 +101,7 @@ class NGCF(nn.Module):
         out = torch.sparse.FloatTensor(i, v, x.shape).to(x.device)
         return out * (1. / (1 - rate))
 
-    def computer(self, adj, adj_drop_out=True, mask=None):
+    def computer(self, adj, adj_drop_out=True, mask_prob=None):
         # TODO: override lightGCN here
         """
         propagate methods for lightGCN
@@ -117,6 +117,9 @@ class NGCF(nn.Module):
 
         all_emb = torch.cat([self.embedding_dict['user_emb'], self.embedding_dict['item_emb']], 0)
         all_embedding = [all_emb]
+        if mask_prob is not None:
+            mask = all_emb.data.new_empty((all_emb.shape[0], 1)).bernoulli_(1 - mask_prob).expand_as(all_emb).to(self.device)
+            all_emb = mask * all_emb
 
         for k in range(self.n_layers):
             if self._is_sparse:
@@ -165,12 +168,12 @@ class NGCF(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, adj_drop_out=True, mask=None):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, adj_drop_out=True, mask_prob=None):
         """
         query from GROC means that we want to push adj into computational graph
         """
 
-        all_users, all_items = self.computer(adj, adj_drop_out, mask)
+        all_users, all_items = self.computer(adj, adj_drop_out, mask_prob)
 
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
