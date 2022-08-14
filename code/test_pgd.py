@@ -502,10 +502,14 @@ if args.pgd_attack:
     print("=================================================")
     adj = adj.to_dense()
     # Setup Attack Model
+    local_path = os.path.abspath(os.path.dirname(os.getcwd()))
     if args.model_ngcf:
         print("NGCF PGD attack.")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
         model = 'NGCF'
+        path_ = local_path + '/models/{}/NGCF_baseline_no_use_dcl.ckpt'.format(args.dataset)
+        Recmodel.load_state_dict(torch.load(path_))
+        Recmodel = Recmodel.to(device)
         modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
                                     args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
                                     args.dataset)
@@ -514,6 +518,9 @@ if args.pgd_attack:
         print("GCMC PGD attack.")
         Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
         model = 'GCMC'
+        path_ = local_path + '/models/{}/GCMC_baseline_no_use_dcl.ckpt'.format(args.dataset)
+        Recmodel.load_state_dict(torch.load(path_))
+        Recmodel = Recmodel.to(device)
         modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
                                     args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
                                     args.dataset)
@@ -526,6 +533,9 @@ if args.pgd_attack:
         print("LR-GCCF PGD attack.")
         Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
         model = 'GCCF'
+        path_ = local_path + '/models/{}/GCCF_baseline_no_use_dcl.ckpt'.format(args.dataset)
+        Recmodel.load_state_dict(torch.load(path_))
+        Recmodel = Recmodel.to(device)
         modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
                                     args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
                                     args.dataset)
