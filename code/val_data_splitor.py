@@ -4,6 +4,7 @@ import os
 
 
 def path_check():
+    # Used to split training data into train and valid
     if not os.path.exists("../data/" + world.dataset + '/train_original.txt'):
         train_file = "../data/" + world.dataset + '/train.txt'
 

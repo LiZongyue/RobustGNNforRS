@@ -1,8 +1,10 @@
 import world
 import dataloader
 import model
-import utils
 from pprint import pprint
+from val_data_splitor import path_check
+
+path_check()
 
 if world.dataset in ['gowalla', 'yelp2018', 'amazon-book', 'mooc', 'ml-1m']:
     dataset = dataloader.Loader(path="../data/" + world.dataset)

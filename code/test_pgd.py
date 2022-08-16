@@ -1,6 +1,3 @@
-from val_data_splitor import path_check
-
-path_check()  # TODO find right place for this function
 import gc
 import torch
 import numpy as np
@@ -528,6 +525,16 @@ if args.pgd_attack:
     # if args.model_lightgcn:
     #     print("LightGCN PGD attack.")
     #     Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=args.use_dcl)
+    if args.model_lightgcn:
+        print("LightGCN PGD attack.")
+        Recmodel = lightgcn.LightGCN(device, num_users, num_items, use_dcl=args.use_dcl)
+        model = 'LightGCN'
+        path_ = local_path + '/models/{}/LightGCN_baseline_no_use_dcl.ckpt'.format(args.dataset)
+        Recmodel.load_state_dict(torch.load(path_))
+        Recmodel = Recmodel.to(device)
+        modified_adj = attack_model(Recmodel, adj, perturbations, args.path_modified_adj, args.modified_adj_name,
+                                    args.modified_adj_id, users, posItems, negItems, Recmodel.num_users, device, model,
+                                    args.dataset)
 
     if args.model_gccf:
         print("LR-GCCF PGD attack.")
