@@ -217,7 +217,7 @@ class GROC_loss(nn.Module):
 
     def graph_generator(self):
         random_tensor = 0.8
-        sparse_adj = self.adj.to_sparse().to(self.device)
+        sparse_adj = self.ori_adj.to_sparse().to(self.device)
         random_tensor += torch.rand(sparse_adj._nnz()).to(self.device)
         dropout_mask = torch.floor(random_tensor).type(torch.bool)
         i = sparse_adj._indices()
@@ -226,7 +226,7 @@ class GROC_loss(nn.Module):
         i = i[:, dropout_mask]
         v = v[dropout_mask]
 
-        out = torch.sparse.FloatTensor(i, v, self.adj.shape).to(self.device)
+        out = torch.sparse.FloatTensor(i, v, self.ori_adj.shape).to(self.device)
         adj_perturb = out.to(self.device)
         adj_perturb = utils.normalize_adj_tensor(adj_perturb, self.d_mtr, sparse=True)
 
