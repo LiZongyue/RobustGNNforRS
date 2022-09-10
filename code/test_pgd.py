@@ -125,6 +125,7 @@ parser.add_argument('--baseline_single_loss', type=bool, default=False, help='ba
 parser.add_argument('--train_with_bpr_perturb', type=bool, default=False, help='GROC training controller. GCL_DCL training ')
 parser.add_argument('--only_user_groc', type=bool, default=False, help='GROC training anchor node only from users ')
 parser.add_argument('--finetune_pretrained', type=bool, default=False, help='GROC training anchor node only from users ')
+parser.add_argument('--sgl_t', type=float, default=0.5, help='GROC training anchor node only from users ')
 parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                     help='GROC adj insert/remove with bpr gradient signals.')
 
@@ -255,9 +256,9 @@ def train_groc_pipe(args_, model_, device_, dataset_, num_users_, num_items_, ad
                 baseline = baseline.to(device)
             else:
                 raise Exception("Baseline Model Unknown.")
+        adj_rm_1 = []
+        adj_rm_2 = []
 
-        adj_rm_1 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=True)
-        adj_rm_2 = attack_adjs(baseline, adj, perturbations, args_.eps[args_.modified_adj_id], users, posItems, negItems, device, largest=True)
     model_path_ = os.path.abspath(os.path.dirname(os.getcwd())) + \
                   '/models/GROC_models/{}/{}_{}_{}_after_{}_{}_{}_{}_{}.ckpt'.format(args_.dataset, today_,
                                                                                        model_, dcl, bpr_gradient_, mode,
@@ -280,7 +281,8 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
     perturbations: # of perturbated edges
     rate: drop rate
     """
-    baseline_.train()
+    if baseline_ is not None:
+        baseline_.train()
     gradient_adj = torch.zeros(adj_.size()).to(device_)
     ori_adj_sparse = utils.normalize_adj_tensor(adj_).to_sparse()  # for bpr loss
 
@@ -298,7 +300,9 @@ def attack_adjs(baseline_, adj_, perturbations_, rate_, users_, posItems_, negIt
             v = v[dropout_mask]
 
             out = torch.sparse.FloatTensor(i, v, adj_.shape).to(device_)
-            adj_perturb = (out * (1. / (1 - rate_))).to_dense().to(device_)
+            adj_perturb = out.to(device_)
+            adj_perturb = utils.normalize_adj_tensor(adj_perturb, d_mtr, sparse=True)
+
         else:
             users = users_.to(device_)
             posItems = posItems_.to(device_)
@@ -367,7 +371,8 @@ if args.train_baseline:
             adj_list = load_p_adj(args.dataset, model)
             Recmodel = ngcf_ori.NGCF(device, num_users, num_items, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val,
+                            negItems_val, adj_list)
 
         if args.model_lightgcn:
             print("LightGCN Baseline Model with double Loss Calibration.")
@@ -375,7 +380,8 @@ if args.train_baseline:
             adj_list = load_p_adj(args.dataset, model)
             Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val,
+                            negItems_val, adj_list)
 
         if args.model_gccf:
             print("GCCF Baseline Model with double Loss Calibration.")
@@ -383,7 +389,8 @@ if args.train_baseline:
             adj_list = load_p_adj(args.dataset, model)
             Recmodel = lightgcn.LightGCN(device, num_users, num_items, is_light_gcn=False, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val,
+                            negItems_val, adj_list)
 
         if args.model_gcmc:
             print("GCMC Baseline Model with double Loss Calibration.")
@@ -391,7 +398,8 @@ if args.train_baseline:
             adj_list = load_p_adj(args.dataset, model)
             Recmodel = ngcf_ori.NGCF(device, num_users, num_items, is_gcmc=True, use_dcl=args.use_dcl)
             train_groc_pipe(args, model, device, dataset, num_users, num_items, adj, Recmodel, d_mtr, today,
-                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, adj_list)
+                            bpr_gradient, bpr_flag, data_len, users, posItems, negItems, users_val, posItems_val,
+                            negItems_val, adj_list)
 
 if args.train_groc:
     if args.model_ngcf:

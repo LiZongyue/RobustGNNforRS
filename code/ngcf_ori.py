@@ -157,6 +157,42 @@ class NGCF(nn.Module):
         users, items = torch.split(all_emb, [self.num_users, self.num_items])
         return users, items
 
+    def _forward_gcn(self, norm_adj):
+        all_emb = torch.cat([self.embedding_dict['user_emb'], self.embedding_dict['item_emb']], 0)
+        all_embedding = [all_emb]
+
+        for k in range(self.n_layers):
+            side_embeddings = torch.sparse.mm(norm_adj[k], all_emb)
+            # transformed sum messages of neighbors.
+            sum_embeddings = torch.matmul(side_embeddings, self.weight_dict['W_gc_%d' % k]) \
+                             + self.weight_dict['b_gc_%d' % k]
+
+            # bi messages of neighbors.
+            # element-wise product
+            bi_embeddings = torch.mul(all_emb, side_embeddings)
+            # transformed bi messages of neighbors.
+            bi_embeddings = torch.matmul(bi_embeddings, self.weight_dict['W_bi_%d' % k]) \
+                            + self.weight_dict['b_bi_%d' % k]
+
+            # non-linear activation.
+            ego_embeddings = nn.LeakyReLU(negative_slope=0.2)(sum_embeddings + bi_embeddings)
+
+            # message dropout.
+            # ego_embeddings = nn.Dropout(self.mess_dropout[k])(ego_embeddings)
+
+            # normalize the distribution of embeddings.
+            norm_embeddings = F.normalize(ego_embeddings, p=2, dim=1)
+            if self.is_gcmc:
+                mlp_embeddings = torch.matmul(norm_embeddings, self.weight_dict['W_mlp_%d' % k]) + self.weight_dict['b_mlp_%d' % k]
+                # mlp_embeddings = torch.dropout(mlp_embeddings, 1 - self.mess_dropout[k])
+                all_embedding += [mlp_embeddings]
+            else:
+                all_embedding += [norm_embeddings]
+
+        all_emb = torch.cat(all_embedding, 1)
+        users, items = torch.split(all_emb, [self.num_users, self.num_items])
+        return users, items
+
     def forward(self, adj, users, items):
         # compute embedding
         all_users, all_items = self.computer(adj)
@@ -168,12 +204,14 @@ class NGCF(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, adj_drop_out=True, mask_prob=None):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, adj_drop_out=True, mask_prob=None, sgl=False):
         """
         query from GROC means that we want to push adj into computational graph
         """
-
-        all_users, all_items = self.computer(adj, adj_drop_out, mask_prob)
+        if sgl:
+            all_users, all_items = self._forward_gcn(adj)
+        else:
+            all_users, all_items = self.computer(adj, adj_drop_out, mask_prob)
 
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]

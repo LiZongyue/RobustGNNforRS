@@ -124,6 +124,22 @@ class LightGCN(nn.Module):
         users, items = torch.split(light_out, [self.num_users, self.num_items])
         return users, items
 
+    def _forward_gcn(self, norm_adj):
+        ego_embeddings = torch.cat([self.embedding_user.weight, self.embedding_item.weight], dim=0)
+        all_embeddings = [ego_embeddings]
+
+        for k in range(self.n_layers):
+            if isinstance(norm_adj, list):
+                ego_embeddings = torch.sparse.mm(norm_adj[k], ego_embeddings)
+            else:
+                ego_embeddings = torch.sparse.mm(norm_adj, ego_embeddings)
+            all_embeddings += [ego_embeddings]
+
+        all_embeddings = torch.stack(all_embeddings, dim=1).mean(dim=1)
+        user_embeddings, item_embeddings = torch.split(all_embeddings, [self.num_users, self.num_items], dim=0)
+
+        return user_embeddings, item_embeddings
+
     def forward(self, adj, users, items):
         # compute embedding
         all_users, all_items = self.computer(adj)
@@ -135,11 +151,14 @@ class LightGCN(nn.Module):
         gamma = torch.sum(inner_pro, dim=1)
         return gamma
 
-    def getEmbedding(self, adj, users, pos_items, neg_items=None, mask_prob=None):
+    def getEmbedding(self, adj, users, pos_items, neg_items=None, mask_prob=None, sgl=False):
         """
         query from GROC means that we want to push adj into computational graph
         """
-        all_users, all_items = self.computer(adj, mask_prob=mask_prob)
+        if sgl:
+            all_users, all_items = self._forward_gcn(adj)
+        else:
+            all_users, all_items = self.computer(adj, mask_prob=mask_prob)
         users_emb = all_users[users]
         pos_emb = all_items[pos_items]
         # neg_emb = all_items[neg_items]
@@ -319,4 +338,3 @@ class LightGCN(nn.Module):
                 #     eval_log.append("Val loss decrease from {} to {}, save model!".format(aver_val_loss, min_val_loss))
                 #     utils.append_log_to_file(eval_log, i, log_file_name)
                 #     min_val_loss = aver_val_loss
-

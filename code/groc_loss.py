@@ -7,6 +7,7 @@ from utils import scheduler_groc
 import Procedure
 from register import dataset
 import numpy as np
+from sgl import sgl_computing
 from utils_attack import attack_model
 import utils
 import torch.nn.functional as F
@@ -214,6 +215,23 @@ class GROC_loss(nn.Module):
 
         return optimizer
 
+    def graph_generator(self):
+        random_tensor = 0.8
+        sparse_adj = self.adj.to_sparse().to(self.device)
+        random_tensor += torch.rand(sparse_adj._nnz()).to(self.device)
+        dropout_mask = torch.floor(random_tensor).type(torch.bool)
+        i = sparse_adj._indices()
+        v = sparse_adj._values()
+
+        i = i[:, dropout_mask]
+        v = v[dropout_mask]
+
+        out = torch.sparse.FloatTensor(i, v, self.adj.shape).to(self.device)
+        adj_perturb = out.to(self.device)
+        adj_perturb = utils.normalize_adj_tensor(adj_perturb, self.d_mtr, sparse=True)
+
+        return adj_perturb
+
     def groc_train_with_bpr_sparse(self, data_len_, users, posItems, negItems, users_val, posItems_val, negItems_val, checkpoint_file_name, log_file_name, adj_rm_1=None, adj_rm_2=None, sparse=True):
         self.ori_model.train()
         embedding_param = []
@@ -250,6 +268,11 @@ class GROC_loss(nn.Module):
 
             aver_loss, aver_bpr_loss, aver_groc_loss = 0., 0., 0.
             val_aver_loss, val_aver_bpr_loss, val_aver_groc_loss = 0., 0., 0.
+            adj_rm_1 = []
+            adj_rm_2 = []
+            for _ in range(3):
+                adj_rm_1.append(self.graph_generator())
+                adj_rm_2.append(self.graph_generator())
 
             for (batch_i, (batch_users, batch_pos, batch_neg)) \
                     in enumerate(utils.minibatch(users, posItems, negItems, batch_size=self.args.batch_size)):
@@ -395,19 +418,12 @@ class GROC_loss(nn.Module):
         self.ori_model.requires_grad_(True)
 
         # Normalize perturbed adj (with insertion)
-        if sparse:
-            adj_rm_norm_1 = utils.normalize_adj_tensor(adj_rm_1, self.d_mtr, sparse=True)
-            adj_rm_norm_2 = utils.normalize_adj_tensor(adj_rm_2, self.d_mtr, sparse=True)
-        else:
-            adj_rm_norm_1 = utils.normalize_adj_tensor(adj_rm_1.to_sparse(), self.d_mtr, sparse=True)
-            adj_rm_norm_2 = utils.normalize_adj_tensor(adj_rm_2.to_sparse(), self.d_mtr, sparse=True)
 
         if val:
             self.ori_model.requires_grad_(False)
         model_name = self.ori_model.__class__.__name__
-        groc_loss = ori_gcl_computing(self.ori_model, adj_rm_norm_1, adj_rm_norm_2, batch_users,
-                                      batch_pos, self.args, self.device, mask_p_1=self.args.mask_prob_1,
-                                      mask_p_2=self.args.mask_prob_2, model_name=model_name)
+        groc_loss = sgl_computing(self.ori_model, adj_rm_1, adj_rm_2, batch_users, batch_pos, self.args, model_name=model_name)
+
         if self.device != 'cpu':
             torch.cuda.empty_cache()
         gc.collect()
