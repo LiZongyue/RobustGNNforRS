@@ -133,9 +133,11 @@ class LightGCN(nn.Module):
                 ego_embeddings = torch.sparse.mm(norm_adj[k], ego_embeddings)
             else:
                 ego_embeddings = torch.sparse.mm(norm_adj, ego_embeddings)
-            all_embeddings += [ego_embeddings]
-
-        all_embeddings = torch.stack(all_embeddings, dim=1).mean(dim=1)
+            all_embeddings.append(ego_embeddings)
+        if self.is_lightgcn:
+            all_embeddings = torch.stack(all_embeddings, dim=1).mean(dim=1)
+        else:
+            all_embeddings = torch.cat(all_embeddings, dim=1)
         user_embeddings, item_embeddings = torch.split(all_embeddings, [self.num_users, self.num_items], dim=0)
 
         return user_embeddings, item_embeddings

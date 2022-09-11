@@ -216,7 +216,7 @@ class GROC_loss(nn.Module):
         return optimizer
 
     def graph_generator(self):
-        random_tensor = 0.8
+        random_tensor = self.args.drop_rate_inverse
         sparse_adj = self.ori_adj.to_sparse().to(self.device)
         random_tensor += torch.rand(sparse_adj._nnz()).to(self.device)
         dropout_mask = torch.floor(random_tensor).type(torch.bool)

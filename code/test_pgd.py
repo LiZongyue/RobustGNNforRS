@@ -126,6 +126,7 @@ parser.add_argument('--train_with_bpr_perturb', type=bool, default=False, help='
 parser.add_argument('--only_user_groc', type=bool, default=False, help='GROC training anchor node only from users ')
 parser.add_argument('--finetune_pretrained', type=bool, default=False, help='GROC training anchor node only from users ')
 parser.add_argument('--sgl_t', type=float, default=0.5, help='GROC training anchor node only from users ')
+parser.add_argument('--drop_rate_inverse', type=float, default=0.95, help='GROC training anchor node only from users ')
 parser.add_argument('--with_bpr_gradient', type=bool, default=False,
                     help='GROC adj insert/remove with bpr gradient signals.')
 
