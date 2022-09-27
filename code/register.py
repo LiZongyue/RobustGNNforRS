@@ -6,7 +6,7 @@ from val_data_splitor import path_check
 
 path_check()
 
-if world.dataset in ['gowalla', 'yelp2018', 'amazon-book', 'mooc', 'ml-1m']:
+if world.dataset in ['gowalla', 'yelp2018', 'amazon-book', 'mooc', 'ml-1m', 'FilmTrust']:
     dataset = dataloader.Loader(path="../data/" + world.dataset)
 elif world.dataset == 'lastfm':
     dataset = dataloader.LastFM()

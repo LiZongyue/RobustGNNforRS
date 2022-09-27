@@ -38,7 +38,7 @@ parser.add_argument('--groc_with_bpr_cat', type=bool, default=False, help='Use s
 parser.add_argument('--use_groc_pgd', type=bool, default=False, help='Use scheduler for learning rate decay')
 parser.add_argument('--loss_weight_bpr', type=float, default=0.9,
                     help='train loss with learnable weight between 2 losses')
-parser.add_argument('--dataset', type=str, default='ml-1m', choices=['ml-1m', 'amazon-book', 'gowalla', 'yelp2018'],
+parser.add_argument('--dataset', type=str, default='ml-1m', choices=['ml-1m', 'amazon-book', 'gowalla', 'yelp2018', 'FilmTrust'],
                     help='dataset')
 parser.add_argument('--T_groc', type=float, default=0.7, help='param temperature for GROC')
 parser.add_argument('--ptb_rate', type=float, default=0.5, help='perturbation rate')

@@ -23,7 +23,7 @@ BOARD_PATH = join(CODE_PATH, 'runs')
 FILE_PATH = join(CODE_PATH, 'checkpoints')
 
 config = {}
-all_dataset = ['lastfm', 'gowalla', 'yelp2018', 'amazon-book', 'mooc', 'ml-1m']
+all_dataset = ['lastfm', 'gowalla', 'yelp2018', 'amazon-book', 'mooc', 'ml-1m', 'FilmTrust']
 all_models = ['mf', 'lgn']
 # config['batch_size'] = 4096
 config['bpr_batch_size'] = args.bpr_batch
