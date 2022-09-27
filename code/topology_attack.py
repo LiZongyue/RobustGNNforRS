@@ -193,7 +193,7 @@ class PGDAttack(BaseAttack):
 
         """
 
-        return n * np.log(alpha) + n * alpha * np.log(d_min) + (alpha + 1) * S_d
+        return n * np.log(alpha.detach().cpu()) + n.detach().cpu() * alpha.detach().cpu() * np.log(d_min) + (alpha.detach().cpu() + 1) * S_d.detach().cpu()
 
     @staticmethod
     def update_Sx(S_old, n_old, d_old, d_new, d_min):
