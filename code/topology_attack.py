@@ -195,8 +195,8 @@ class PGDAttack(BaseAttack):
 
         return n * np.log(alpha.detach().cpu()) + n.detach().cpu() * alpha.detach().cpu() * np.log(d_min) + (alpha.detach().cpu() + 1) * S_d.detach().cpu()
 
-    @staticmethod
-    def update_Sx(S_old, n_old, d_old, d_new, d_min):
+
+    def update_Sx(self, S_old, n_old, d_old, d_new, d_min):
         """
         Update on the sum of log degrees S_d and n based on degree distribution resulting from inserting or deleting
         a single edge.
@@ -208,7 +208,7 @@ class PGDAttack(BaseAttack):
         d_old_in_range = d_old * old_in_range
         d_new_in_range = d_new * new_in_range
 
-        new_S_d = S_old - torch.log(torch.maximum(d_old_in_range, torch.tensor([1]))).sum() + torch.log(torch.maximum(d_new_in_range, torch.tensor([1]))).sum()
+        new_S_d = S_old - torch.log(torch.maximum(d_old_in_range, torch.tensor([1]).to(self.device))).sum() + torch.log(torch.maximum(d_new_in_range, torch.tensor([1]).to(self.device))).sum()
         new_n = n_old - torch.sum(old_in_range) + torch.sum(new_in_range)
 
         return new_S_d, new_n
